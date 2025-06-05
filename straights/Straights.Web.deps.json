@@ -7,11 +7,11 @@
   "targets": {
     ".NETCoreApp,Version=v9.0": {},
     ".NETCoreApp,Version=v9.0/browser-wasm": {
-      "Straights.Web/0.6.11+15311660139": {
+      "Straights.Web/0.6.12+15472186861": {
         "dependencies": {
-          "Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25228.1",
+          "Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25256.1",
           "Microsoft.NET.ILLink.Tasks": "9.0.5",
-          "Straights.Solver": "0.6.11",
+          "Straights.Solver": "0.6.12",
           "StyleCop.Analyzers.Unstable": "1.2.0.556",
           "TestableIO.System.IO.Abstractions.Analyzers": "2022.0.0",
           "runtime.linux-x64.Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25214.1"
@@ -20,13 +20,13 @@
           "Straights.Web.dll": {}
         }
       },
-      "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25228.1": {
+      "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {
         "dependencies": {
-          "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25228.1"
+          "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25256.1"
         }
       },
       "Microsoft.NET.ILLink.Tasks/9.0.5": {},
-      "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25228.1": {},
+      "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {},
       "runtime.linux-x64.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25214.1": {},
       "StyleCop.Analyzers.Unstable/1.2.0.556": {},
       "System.IO.Abstractions/22.0.14": {
@@ -72,31 +72,31 @@
           }
         }
       },
-      "Straights.Solver/0.6.11": {
+      "Straights.Solver/0.6.12": {
         "dependencies": {
           "System.IO.Abstractions": "22.0.14"
         },
         "runtime": {
           "Straights.Solver.dll": {
-            "assemblyVersion": "0.6.11.0",
-            "fileVersion": "0.6.11.0"
+            "assemblyVersion": "0.6.12.0",
+            "fileVersion": "0.6.12.0"
           }
         }
       }
     }
   },
   "libraries": {
-    "Straights.Web/0.6.11+15311660139": {
+    "Straights.Web/0.6.12+15472186861": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25228.1": {
+    "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-hhY73dvBee8Mn9KUrZWyE2UYb3hqObbvu3RnBZyRu5LdTJ6U9voFzk2LBJ2xUPJO5YQkYzf4kxXrGjoFMRxAIQ==",
-      "path": "microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25228.1",
-      "hashPath": "microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25228.1.nupkg.sha512"
+      "sha512": "sha512-U8t1p6MiA6zP/cqt7FhUfliiKP6s97Fca2WOLXuD/gMkxDqJOkiUa7gcW8q1lV3wWOpEnjn8M2vpHYTB36/01Q==",
+      "path": "microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25256.1",
+      "hashPath": "microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25256.1.nupkg.sha512"
     },
     "Microsoft.NET.ILLink.Tasks/9.0.5": {
       "type": "package",
@@ -105,12 +105,12 @@
       "path": "microsoft.net.illink.tasks/9.0.5",
       "hashPath": "microsoft.net.illink.tasks.9.0.5.nupkg.sha512"
     },
-    "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25228.1": {
+    "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-6ZSw6cgewex9oCMZi6Gv9hHJulaTu/sSnoRZFJh3Wi2gfbG4UCJNgOqUXVBNwCRrlMIjEo81o820eM+prgm7Jw==",
-      "path": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25228.1",
-      "hashPath": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25228.1.nupkg.sha512"
+      "sha512": "sha512-fsfXKZj0QBbTWwK86VeJq1utLLaX67PtuHHojVIRJnmyBXxl2Z2dLbf3mh2oJ3cPrZIXW3IG7Y8JNOTxPnnZrQ==",
+      "path": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25256.1",
+      "hashPath": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25256.1.nupkg.sha512"
     },
     "runtime.linux-x64.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25214.1": {
       "type": "package",
@@ -161,7 +161,7 @@
       "path": "testably.abstractions.filesystem.interface/9.0.0",
       "hashPath": "testably.abstractions.filesystem.interface.9.0.0.nupkg.sha512"
     },
-    "Straights.Solver/0.6.11": {
+    "Straights.Solver/0.6.12": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
