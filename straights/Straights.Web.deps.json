@@ -7,11 +7,11 @@
   "targets": {
     ".NETCoreApp,Version=v9.0": {},
     ".NETCoreApp,Version=v9.0/browser-wasm": {
-      "Straights.Web/0.6.12+15472186861": {
+      "Straights.Web/0.6.13+16240188884": {
         "dependencies": {
-          "Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25256.1",
-          "Microsoft.NET.ILLink.Tasks": "9.0.5",
-          "Straights.Solver": "0.6.12",
+          "Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25329.2",
+          "Microsoft.NET.ILLink.Tasks": "9.0.7",
+          "Straights.Solver": "0.6.13",
           "StyleCop.Analyzers.Unstable": "1.2.0.556",
           "TestableIO.System.IO.Abstractions.Analyzers": "2022.0.0",
           "runtime.linux-x64.Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25214.1"
@@ -20,47 +20,47 @@
           "Straights.Web.dll": {}
         }
       },
-      "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {
+      "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25329.2": {
         "dependencies": {
-          "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25256.1"
+          "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM": "10.0.0-preview.2.25329.2"
         }
       },
-      "Microsoft.NET.ILLink.Tasks/9.0.5": {},
-      "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {},
+      "Microsoft.NET.ILLink.Tasks/9.0.7": {},
+      "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25329.2": {},
       "runtime.linux-x64.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25214.1": {},
       "StyleCop.Analyzers.Unstable/1.2.0.556": {},
-      "System.IO.Abstractions/22.0.14": {
+      "System.IO.Abstractions/22.0.15": {
         "dependencies": {
-          "TestableIO.System.IO.Abstractions": "22.0.14",
-          "TestableIO.System.IO.Abstractions.Wrappers": "22.0.14"
+          "TestableIO.System.IO.Abstractions": "22.0.15",
+          "TestableIO.System.IO.Abstractions.Wrappers": "22.0.15"
         },
         "runtime": {
           "lib/net9.0/System.IO.Abstractions.dll": {
-            "assemblyVersion": "22.0.14.0",
-            "fileVersion": "22.0.14.0"
+            "assemblyVersion": "22.0.15.0",
+            "fileVersion": "22.0.15.0"
           }
         }
       },
-      "TestableIO.System.IO.Abstractions/22.0.14": {
+      "TestableIO.System.IO.Abstractions/22.0.15": {
         "dependencies": {
           "Testably.Abstractions.FileSystem.Interface": "9.0.0"
         },
         "runtime": {
           "lib/net9.0/TestableIO.System.IO.Abstractions.dll": {
-            "assemblyVersion": "22.0.14.0",
-            "fileVersion": "22.0.14.0"
+            "assemblyVersion": "22.0.15.0",
+            "fileVersion": "22.0.15.0"
           }
         }
       },
       "TestableIO.System.IO.Abstractions.Analyzers/2022.0.0": {},
-      "TestableIO.System.IO.Abstractions.Wrappers/22.0.14": {
+      "TestableIO.System.IO.Abstractions.Wrappers/22.0.15": {
         "dependencies": {
           "Testably.Abstractions.FileSystem.Interface": "9.0.0"
         },
         "runtime": {
           "lib/net9.0/TestableIO.System.IO.Abstractions.Wrappers.dll": {
-            "assemblyVersion": "22.0.14.0",
-            "fileVersion": "22.0.14.0"
+            "assemblyVersion": "22.0.15.0",
+            "fileVersion": "22.0.15.0"
           }
         }
       },
@@ -72,45 +72,45 @@
           }
         }
       },
-      "Straights.Solver/0.6.12": {
+      "Straights.Solver/0.6.13": {
         "dependencies": {
-          "System.IO.Abstractions": "22.0.14"
+          "System.IO.Abstractions": "22.0.15"
         },
         "runtime": {
           "Straights.Solver.dll": {
-            "assemblyVersion": "0.6.12.0",
-            "fileVersion": "0.6.12.0"
+            "assemblyVersion": "0.6.13.0",
+            "fileVersion": "0.6.13.0"
           }
         }
       }
     }
   },
   "libraries": {
-    "Straights.Web/0.6.12+15472186861": {
+    "Straights.Web/0.6.13+16240188884": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {
+    "Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25329.2": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-U8t1p6MiA6zP/cqt7FhUfliiKP6s97Fca2WOLXuD/gMkxDqJOkiUa7gcW8q1lV3wWOpEnjn8M2vpHYTB36/01Q==",
-      "path": "microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25256.1",
-      "hashPath": "microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25256.1.nupkg.sha512"
+      "sha512": "sha512-VotuA9t57WcPfdigGHCloZwdHFNwhuZMguTMt6OcYai6Gf2UKj4CKh+fFTqdl8GNDpiT6JCgdajXjOdEfVK7Xw==",
+      "path": "microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25329.2",
+      "hashPath": "microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25329.2.nupkg.sha512"
     },
-    "Microsoft.NET.ILLink.Tasks/9.0.5": {
+    "Microsoft.NET.ILLink.Tasks/9.0.7": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-4L7wbb3Y4BJgIeSnmAf/C6S/qCs9rT1b0dX72uj3qo0qvUH7D0U1tU5ZlC7A3Wb8E/dXK4caOi4JkdLTVJaXhw==",
-      "path": "microsoft.net.illink.tasks/9.0.5",
-      "hashPath": "microsoft.net.illink.tasks.9.0.5.nupkg.sha512"
+      "sha512": "sha512-SZ1brSGoLnhLbE8QUZrtN6YwzN2gDT1wbx9qDBEfFFJcstiDTjJ6ygNuTPBV/K7SjGfx2YNbcJi5+ygbPOZpDg==",
+      "path": "microsoft.net.illink.tasks/9.0.7",
+      "hashPath": "microsoft.net.illink.tasks.9.0.7.nupkg.sha512"
     },
-    "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25256.1": {
+    "runtime.browser-wasm.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25329.2": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-fsfXKZj0QBbTWwK86VeJq1utLLaX67PtuHHojVIRJnmyBXxl2Z2dLbf3mh2oJ3cPrZIXW3IG7Y8JNOTxPnnZrQ==",
-      "path": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25256.1",
-      "hashPath": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25256.1.nupkg.sha512"
+      "sha512": "sha512-38iLeYJ3feuV/8NTwzijzXMq7tJT6w1BdX46/QsLZRSPadOR9uXbkRB/gK/shzh7Mhc0llOffYu/ek386MxdOA==",
+      "path": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm/10.0.0-preview.2.25329.2",
+      "hashPath": "runtime.browser-wasm.microsoft.dotnet.ilcompiler.llvm.10.0.0-preview.2.25329.2.nupkg.sha512"
     },
     "runtime.linux-x64.Microsoft.DotNet.ILCompiler.LLVM/10.0.0-preview.2.25214.1": {
       "type": "package",
@@ -126,19 +126,19 @@
       "path": "stylecop.analyzers.unstable/1.2.0.556",
       "hashPath": "stylecop.analyzers.unstable.1.2.0.556.nupkg.sha512"
     },
-    "System.IO.Abstractions/22.0.14": {
+    "System.IO.Abstractions/22.0.15": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-seKjLnYbWcD4nw8MCjECuqDjwthf9yF4WXhLkgiIb2eGtVhOPEaejQe/Gr6Sppk9KPe7ndJZMyTjDLmWdjcftQ==",
-      "path": "system.io.abstractions/22.0.14",
-      "hashPath": "system.io.abstractions.22.0.14.nupkg.sha512"
+      "sha512": "sha512-BuRWaeHW5/vw7bNOXbIObL2cieSa6UfRe9mhoFoBOA4592WEYMzrE85QRz99dfc3ECS8J5iB7P5os46KD5bwvw==",
+      "path": "system.io.abstractions/22.0.15",
+      "hashPath": "system.io.abstractions.22.0.15.nupkg.sha512"
     },
-    "TestableIO.System.IO.Abstractions/22.0.14": {
+    "TestableIO.System.IO.Abstractions/22.0.15": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-WPqOl2TVNKUMcaTyCIoJqPz1K30u8Pw6sMtRzVuaik4XDuMJLNmp7JMQQVNcVi7Ws3TvH9FlLYQRxO01z5Gixw==",
-      "path": "testableio.system.io.abstractions/22.0.14",
-      "hashPath": "testableio.system.io.abstractions.22.0.14.nupkg.sha512"
+      "sha512": "sha512-AOsNYh7nCr73cCuUTe28xvGP4YZuigbZ11ucVDWe7SYcxsFPAoZJyxLnv9pfEPuwYrGVQkxapQfTX1vYs/mUeA==",
+      "path": "testableio.system.io.abstractions/22.0.15",
+      "hashPath": "testableio.system.io.abstractions.22.0.15.nupkg.sha512"
     },
     "TestableIO.System.IO.Abstractions.Analyzers/2022.0.0": {
       "type": "package",
@@ -147,12 +147,12 @@
       "path": "testableio.system.io.abstractions.analyzers/2022.0.0",
       "hashPath": "testableio.system.io.abstractions.analyzers.2022.0.0.nupkg.sha512"
     },
-    "TestableIO.System.IO.Abstractions.Wrappers/22.0.14": {
+    "TestableIO.System.IO.Abstractions.Wrappers/22.0.15": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-w8VwX0jiDSfj5bM+BopyZszvvEnQKDTNDp9pUKYwSOj34P9GAllmJ6kcGyye2IrzctdQs3xFpg8Vdsm8TrWfgQ==",
-      "path": "testableio.system.io.abstractions.wrappers/22.0.14",
-      "hashPath": "testableio.system.io.abstractions.wrappers.22.0.14.nupkg.sha512"
+      "sha512": "sha512-WwHT48iDN+EuTcllexcM0/sdcZ4oCdNS/6eteJrXv2eJ7CcE+Qp9C6wPw6V/RKJ7LZ1nnMREbmtWWEggt364mQ==",
+      "path": "testableio.system.io.abstractions.wrappers/22.0.15",
+      "hashPath": "testableio.system.io.abstractions.wrappers.22.0.15.nupkg.sha512"
     },
     "Testably.Abstractions.FileSystem.Interface/9.0.0": {
       "type": "package",
@@ -161,7 +161,7 @@
       "path": "testably.abstractions.filesystem.interface/9.0.0",
       "hashPath": "testably.abstractions.filesystem.interface.9.0.0.nupkg.sha512"
     },
-    "Straights.Solver/0.6.12": {
+    "Straights.Solver/0.6.13": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
