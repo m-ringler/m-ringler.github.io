@@ -1,8 +1,15 @@
+// This code implements the `-sMODULARIZE` settings by taking the generated
+// JS program code (INNER_JS_CODE) and wrapping it in a factory function.
+
+// Single threaded MINIMAL_RUNTIME programs do not need access to
+// document.currentScript, so a simple export declaration is enough.
 var createWasmModule = (() => {
+  // When MODULARIZE this JS may be executed later,
+  // after document.currentScript is gone, so we save it.
+  // In EXPORT_ES6 mode we can just use 'import.meta.url'.
   var _scriptName = typeof document != 'undefined' ? document.currentScript?.src : undefined;
-  return (
-async function(moduleArg = {}) {
-  var moduleRtn;
+  return async function(moduleArg = {}) {
+    var moduleRtn;
 
 // include: shell.js
 // The Module object: Our interface to the outside world. We import
@@ -689,7 +696,7 @@ async function instantiateArrayBuffer(binaryFile, imports) {
 }
 
 async function instantiateAsync(binary, binaryFile, imports) {
-  if (!binary && typeof WebAssembly.instantiateStreaming == 'function'
+  if (!binary
       // Don't use streaming for file:// delivered objects in a webview, fetch them synchronously.
       && !isFileURI(binaryFile)
       // Avoid instantiateStreaming() on Node.js environment for now, as while
@@ -937,15 +944,15 @@ async function createWasm() {
     };
   
   var growMemory = (size) => {
-      var b = wasmMemory.buffer;
-      var pages = ((size - b.byteLength + 65535) / 65536) | 0;
+      var oldHeapSize = wasmMemory.buffer.byteLength;
+      var pages = ((size - oldHeapSize + 65535) / 65536) | 0;
       try {
         // round size grow request up to wasm page size (fixed 64KB per spec)
         wasmMemory.grow(pages); // .grow() takes a delta compared to the previous size
         updateMemoryViews();
         return 1 /*success*/;
       } catch(e) {
-        err(`growMemory: Attempted to grow heap from ${b.byteLength} bytes to ${size} bytes, but got error: ${e}`);
+        err(`growMemory: Attempted to grow heap from ${oldHeapSize} bytes to ${size} bytes, but got error: ${e}`);
       }
       // implicit 0 return to save code size (caller will cast "undefined" into 0
       // anyhow)
@@ -1130,6 +1137,18 @@ async function createWasm() {
 
   var UTF8Decoder = typeof TextDecoder != 'undefined' ? new TextDecoder() : undefined;
   
+  var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
+      var maxIdx = idx + maxBytesToRead;
+      if (ignoreNul) return maxIdx;
+      // TextDecoder needs to know the byte length in advance, it doesn't stop on
+      // null terminator by itself.
+      // As a tiny code save trick, compare idx against maxIdx using a negation,
+      // so that maxBytesToRead=undefined/NaN means Infinity.
+      while (heapOrArray[idx] && !(idx >= maxIdx)) ++idx;
+      return idx;
+    };
+  
+  
     /**
      * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
      * array that contains uint8 values, returns a copy of that string as a
@@ -1137,25 +1156,18 @@ async function createWasm() {
      * heapOrArray is either a regular array, or a JavaScript typed array view.
      * @param {number=} idx
      * @param {number=} maxBytesToRead
+     * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
      * @return {string}
      */
-  var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead = NaN) => {
-      var endIdx = idx + maxBytesToRead;
-      var endPtr = idx;
-      // TextDecoder needs to know the byte length in advance, it doesn't stop on
-      // null terminator by itself.  Also, use the length info to avoid running tiny
-      // strings through TextDecoder, since .subarray() allocates garbage.
-      // (As a tiny code save trick, compare endPtr against endIdx using a negation,
-      // so that undefined/NaN means Infinity)
-      while (heapOrArray[endPtr] && !(endPtr >= endIdx)) ++endPtr;
+  var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead, ignoreNul) => {
+  
+      var endPtr = findStringEnd(heapOrArray, idx, maxBytesToRead, ignoreNul);
   
       // When using conditional TextDecoder, skip it for short strings as the overhead of the native call is not worth it.
       if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
         return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
       }
       var str = '';
-      // If building with TextDecoder, we have already computed the string length
-      // above, so test loop end condition against that
       while (idx < endPtr) {
         // For UTF8 byte structure, see:
         // http://en.wikipedia.org/wiki/UTF-8#Description
@@ -1192,15 +1204,13 @@ async function createWasm() {
      *   maximum number of bytes to read. You can omit this parameter to scan the
      *   string until the first 0 byte. If maxBytesToRead is passed, and the string
      *   at [ptr, ptr+maxBytesToReadr[ contains a null byte in the middle, then the
-     *   string will cut short at that byte index (i.e. maxBytesToRead will not
-     *   produce a string of exact length [ptr, ptr+maxBytesToRead[) N.B. mixing
-     *   frequent uses of UTF8ToString() with and without maxBytesToRead may throw
-     *   JS JIT optimizations off, so it is worth to consider consistently using one
+     *   string will cut short at that byte index.
+     * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
      * @return {string}
      */
-  var UTF8ToString = (ptr, maxBytesToRead) => {
+  var UTF8ToString = (ptr, maxBytesToRead, ignoreNul) => {
       assert(typeof ptr == 'number', `UTF8ToString expects a number (got ${typeof ptr})`);
-      return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead) : '';
+      return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead, ignoreNul) : '';
     };
   var SYSCALLS = {
   varargs:undefined,
@@ -1410,7 +1420,6 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'inetNtop6',
   'readSockaddr',
   'writeSockaddr',
-  'emscriptenLog',
   'readEmAsmArgs',
   'jstoi_q',
   'autoResumeAudioContext',
@@ -1438,20 +1447,12 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'ASSERTIONS',
   'ccall',
   'cwrap',
-  'uleb128Encode',
-  'sigToWasmTypes',
-  'generateFuncType',
   'convertJsFunctionToWasm',
   'getEmptyTableSlot',
   'updateTableMap',
   'getFunctionAddress',
   'addFunction',
   'removeFunction',
-  'reallyNegative',
-  'unSign',
-  'strLen',
-  'reSign',
-  'formatString',
   'intArrayFromString',
   'intArrayToString',
   'AsciiToString',
@@ -1501,7 +1502,6 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'registerGamepadEventCallback',
   'registerBeforeUnloadEventCallback',
   'fillBatteryEventData',
-  'battery',
   'registerBatteryEventCallback',
   'setCanvasElementSize',
   'getCanvasElementSize',
@@ -2017,10 +2017,11 @@ for (const prop of Object.keys(Module)) {
 
 
 
-  return moduleRtn;
-}
-);
+    return moduleRtn;
+  };
 })();
+
+// Export using a UMD style export, or ES6 exports if selected
 if (typeof exports === 'object' && typeof module === 'object') {
   module.exports = createWasmModule;
   // This default export looks redundant, but it allows TS to import this
@@ -2028,3 +2029,4 @@ if (typeof exports === 'object' && typeof module === 'object') {
   module.exports.default = createWasmModule;
 } else if (typeof define === 'function' && define['amd'])
   define([], () => createWasmModule);
+
