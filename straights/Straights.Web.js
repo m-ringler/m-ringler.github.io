@@ -244,6 +244,9 @@ function assert(condition, text) {
 
 // We used to include malloc/free by default in the past. Show a helpful error in
 // builds with assertions.
+function _malloc() {
+  abort('malloc() called but not included in the build - add `_malloc` to EXPORTED_FUNCTIONS');
+}
 function _free() {
   // Show a helpful error since we used to include free by default in the past.
   abort('free() called but not included in the build - add `_free` to EXPORTED_FUNCTIONS');
@@ -1231,14 +1234,6 @@ async function createWasm() {
   /** @type {WebAssembly.Table} */
   var wasmTable;
 
-  
-  
-  var stringToNewUTF8 = (str) => {
-      var size = lengthBytesUTF8(str) + 1;
-      var ret = _malloc(size);
-      if (ret) stringToUTF8(str, ret, size);
-      return ret;
-    };
 
 // End JS library code
 
@@ -1291,7 +1286,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
 
 // Begin runtime exports
   Module['UTF8ToString'] = UTF8ToString;
-  Module['stringToNewUTF8'] = stringToNewUTF8;
+  Module['stringToUTF8'] = stringToUTF8;
   var missingLibrarySymbols = [
   'writeI53ToI64',
   'writeI53ToI64Clamped',
@@ -1361,6 +1356,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'UTF32ToString',
   'stringToUTF32',
   'lengthBytesUTF32',
+  'stringToNewUTF8',
   'stringToUTF8OnStack',
   'writeArrayToMemory',
   'registerKeyEventCallback',
@@ -1516,7 +1512,6 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'UTF8Decoder',
   'UTF8ArrayToString',
   'stringToUTF8Array',
-  'stringToUTF8',
   'lengthBytesUTF8',
   'UTF16Decoder',
   'JSEvents',
@@ -1706,10 +1701,10 @@ function RhpInitializeStackTraceIpMap(pEntries,count) { const POINTER_SIZE = 4; 
 function RhpGetBiasedWasmFunctionIndexForFunctionPointer(fptr) { const func = wasmTable.get(fptr); let wasmFuncIndex = parseInt(func.name) + 2; if (isNaN(wasmFuncIndex)) wasmFuncIndex = 0; return wasmFuncIndex; }
 
 // Imports from the Wasm binary.
-var _malloc = makeInvalidEarlyAccess('_malloc');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _Memory_Allocate = Module['_Memory_Allocate'] = makeInvalidEarlyAccess('_Memory_Allocate');
 var _Memory_Free = Module['_Memory_Free'] = makeInvalidEarlyAccess('_Memory_Free');
+var _Generator_Hint = Module['_Generator_Hint'] = makeInvalidEarlyAccess('_Generator_Hint');
 var _Generator_Generate = Module['_Generator_Generate'] = makeInvalidEarlyAccess('_Generator_Generate');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
 var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
@@ -1721,10 +1716,10 @@ var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc'
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 
 function assignWasmExports(wasmExports) {
-  _malloc = createExportWrapper('malloc', 1);
   _fflush = createExportWrapper('fflush', 1);
   Module['_Memory_Allocate'] = _Memory_Allocate = createExportWrapper('Memory_Allocate', 1);
   Module['_Memory_Free'] = _Memory_Free = createExportWrapper('Memory_Free', 1);
+  Module['_Generator_Hint'] = _Generator_Hint = createExportWrapper('Generator_Hint', 3);
   Module['_Generator_Generate'] = _Generator_Generate = createExportWrapper('Generator_Generate', 4);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
