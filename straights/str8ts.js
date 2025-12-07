@@ -1,607 +1,632 @@
 // SPDX-FileCopyrightText: 2020 Luis Walter, 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-
-// Global Constants
-function _getButtonColors(darkMode) {
-    const buttonColorsLight = {
-        BUTTONDOWN: '#335',
-        BUTTONUP: '#b1cffc'
+import { Game, Field, minCodeSize as game_minCodeSize } from './game.js';
+import { UndoStack } from './undoStack.js';
+import { NumberInput } from './numberInput.js';
+import * as api from './str8ts-api.js';
+import * as gameHistory from './gameHistory.js';
+import * as Popup from './popup.js';
+const dialogs = {
+    NEW_GAME: 1,
+    GENERATING_NEW_GAME: 3,
+    SOLUTION: 4,
+    RESTART: 5,
+    ABOUT: 6,
+    HINT: 7,
+};
+const MIN_GRID_SIZE = 4;
+const MAX_GRID_SIZE = 12;
+const DEFAULT_GRID_SIZE = 9;
+const DEFAULT_DIFFICULTY = 3;
+// We wrap the UI behavior into a single controller class to avoid leaking many globals
+export class UIController {
+    // state
+    starttime;
+    timer;
+    isInNoteMode = false;
+    game;
+    gameCode;
+    gameUrl;
+    generateDifficulty = DEFAULT_DIFFICULTY;
+    currentGridSize = 12;
+    generateGridSize = DEFAULT_GRID_SIZE;
+    undoStack;
+    hintField = null;
+    buttonColors;
+    numberInput;
+    // injected dependencies
+    $;
+    win;
+    constructor($, win) {
+        this.$ = $;
+        this.win = win;
+        this.undoStack = new UndoStack(this.renderUndoButton.bind(this));
+        const darkMode = win.matchMedia('(prefers-color-scheme: dark)').matches;
+        this.buttonColors = getButtonColors(darkMode);
+        this.game = new Game(this.$, darkMode);
+        this.numberInput = new NumberInput((num) => this.handleNumberInput(num));
     }
-
-    const buttonColorsDark = {
-        BUTTONDOWN: '#e7d9cdff',/* color-button-active */
-        BUTTONUP: '#555'  /* color-button-background */
+    // Button Functions
+    async restartAsync() {
+        await this.showDialogAsync(false);
+        this.game.restart();
+        this.undoStack.clear();
     }
-
-    return darkMode ? buttonColorsDark : buttonColorsLight
-}
-
-const _darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
-
-const _buttonColors = _getButtonColors(_darkMode)
-
-const dialogs = { WELCOME: 1, GENERATED: 2, LOADING: 3, SOLUTION: 4, RESTART: 5, ABOUT: 6, HINT: 7 }
-const MIN_GRID_SIZE = 4
-const MAX_GRID_SIZE = 12
-const DEFAULT_GRID_SIZE = 9
-const DEFAULT_DIFFICULTY = 3
-
-// Global Variables
-let _starttime
-let _timer
-let _noteMode = false
-let _minCodeSize
-let _game
-let _gameCode
-let _gameHistory
-let _gameUrl
-let _difficulty = DEFAULT_DIFFICULTY
-let _currentGridSize = 12
-let _generateGridSize = DEFAULT_GRID_SIZE
-let _undoStack
-let _hintField
-
-// imported functions
-let _generate
-let _generateHint
-
-const _modulePromise = _importModules()
-
-async function _importModules() {
-    const undoStackModule = await import('./undoStack.js')
-    _undoStack = new undoStackModule.UndoStack(_renderUndoButton)
-
-    const gameModule = await import('./game.js')
-    _game = new gameModule.Game($, _darkMode)
-    _minCodeSize = gameModule.minCodeSize
-
-    _gameHistory = await import('./gameHistory.js')
-
-    const generateModule = await import('./generate-str8ts.js')
-    loadedFunctions = generateModule.load_generate()
-    _generate = loadedFunctions.generate
-    _generateHint = loadedFunctions.generateHint
-}
-
-// Button Functions
-function restart() {
-    showDialog(false)
-    _game.restart()
-    _undoStack.clear()
-}
-
-function toggleNoteMode() {
-    _noteMode = !_noteMode
-    const color = (_noteMode) ? _buttonColors.BUTTONDOWN : _buttonColors.BUTTONUP
-    $('#notes').css('background-color', color)
-}
-
-function _renderCounters() {
-    $('#check-counter').text(_game.check_count)
-    $('#hint-counter').text(_game.hint_count)
-}
-
-function check() {
-    _game.check()
-    _renderCounters()
-    _saveState()
-}
-
-async function hint() {
-    closeHint()
-
-    const checkResult = _game.checkForHint()
-    _renderCounters()
-
-    if (!(checkResult.isSolved || checkResult.isWrong)) {
-        await generateAndDisplayHint()
+    toggleNoteMode() {
+        this.isInNoteMode = !this.isInNoteMode;
+        const color = this.isInNoteMode
+            ? this.buttonColors.BUTTONDOWN
+            : this.buttonColors.BUTTONUP;
+        this.$('#toggle-notes-mode-button').css('background-color', color);
     }
-
-    _saveState()
-
-    async function generateAndDisplayHint() {
-        const hintResponse = await _generateHint(_game.toJsonArray())
-        if (hintResponse.status === 0 && hintResponse.message) {
-            const hintData = JSON.parse(hintResponse.message)
-            _hintField = _game.get(hintData.y, hintData.x)
-            _hintField.setHint(hintData.number)
-
-            // hintData.rule is either ColumnNameInPascalCase
-            // or BlockNameInPascalCase.
-            const ruleWords = hintData.rule.split(/(?=[A-Z])/)
-            ruleType = ruleWords[0]
-            ruleName = ruleWords.slice(1).join(" ")
-            ruleTarget = ruleType == 'Block'
+    renderCounters() {
+        this.$('#check-counter').text(this.game.check_count);
+        this.$('#hint-counter').text(this.game.hint_count);
+    }
+    check() {
+        this.game.check();
+        this.renderCounters();
+        this.saveState();
+    }
+    async generateAndDisplayHintAsync() {
+        await this.closeHintAsync();
+        const checkResult = this.game.checkForHint();
+        this.renderCounters();
+        if (!(checkResult.isSolved || checkResult.isWrong)) {
+            await this.generateAndDisplayHintCoreAsync();
+        }
+        this.saveState();
+    }
+    async generateAndDisplayHintCoreAsync() {
+        let resp;
+        try {
+            resp = await api.generateHint(this.game.toJsonArray());
+        }
+        catch (ex) {
+            console.error('Hint generation failed or unsupported:', ex);
+            return;
+        }
+        if (resp && resp.status === 0 && resp.message) {
+            const hintData = JSON.parse(resp.message);
+            this.hintField = this.game.get(hintData.y, hintData.x);
+            this.hintField.setHint(hintData.number);
+            // hintData.rule is either ColumnNameInPascalCase or BlockNameInPascalCase.
+            const ruleWords = hintData.rule.split(/(?=[A-Z])/);
+            const ruleType = ruleWords[0];
+            const ruleName = ruleWords.slice(1).join(' ');
+            const ruleTarget = ruleType == 'Block'
                 ? `${hintData.direction} block`
-                : ((hintData.direction == 'horizontal') ? "row" : "column")
-            $('#hint-text').html(`Hint: ${hintData.number} can be removed by applying the <a href="https://github.com/m-ringler/straights/wiki/Rules-of-Str8ts#${hintData.rule}" target="rules">${ruleName} rule</a> to the ${ruleTarget}.`)
-            _positionHintDialog()
-            showDialog(dialogs.HINT)
+                : hintData.direction == 'horizontal'
+                    ? 'row'
+                    : 'column';
+            this.$('#hint-text').html(`Hint: ${hintData.number} can be removed by applying the <a href="https://github.com/m-ringler/straights/wiki/Rules-of-Str8ts#${hintData.rule}" target="rules">${ruleName} rule</a> to the ${ruleTarget}.`);
+            this.positionHintDialog();
+            await this.showDialogAsync(dialogs.HINT);
         }
-        else if (hintResponse.message) {
-            console.error("Failed to generate a hint:", hintResponse.message)
-        }
-    }
-}
-
-function closeHint() {
-    if (_hintField) {
-        _hintField.setHint(undefined)
-        _hintField = null
-        showDialog(false)
-    }
-}
-
-function _positionHintDialog() {
-    const field = _hintField.getElement()
-    const dialog = $('#hint-dialog');
-    _positionPopup(field, dialog)
-}
-
-function _positionPopup(target, popup) {
-    // Get the position of the field relative to the viewport
-    const targetPos = target[0].getBoundingClientRect();
-    const windowHeight = $(window).height();
-    const windowWidth = $(window).width();
-
-    // Determine the vertical position
-    let popupTop;
-    if ((targetPos.top + targetPos.height / 2) > windowHeight / 2) {
-        popupTop = targetPos.top + window.scrollY - popup.outerHeight();
-    } else {
-        popupTop = targetPos.top + window.scrollY + targetPos.height;
-    }
-
-    // Determine the horizontal position
-    let popupLeft;
-    if ((targetPos.left + targetPos.width / 2) > windowWidth / 2) {
-        popupLeft = targetPos.left + window.scrollX - popup.outerWidth();
-    } else {
-        popupLeft = targetPos.left + window.scrollX + targetPos.width;
-    }
-
-    // Set the position of the dialog
-    popup.css({
-        position: 'absolute',
-        top: popupTop,
-        left: popupLeft
-    });
-}
-
-function solution() {
-    showDialog(false)
-    clearInterval(_timer)
-    _game.showSolution()
-    _undoStack.clear()
-}
-
-function undo() {
-    if (_undoStack.length > 0 && !_game.isSolved) {
-        const field = _undoStack.pop()
-        const gameField = _game.get(field.row, field.col)
-        gameField.copyFrom(field)
-        gameField.wrong = false
-        _game.selectCell(field.row, field.col)
-        gameField.render()
-    }
-}
-
-function _renderUndoButton(length) {
-    const undoButton = $('#undo')
-    if (length == 0 || _game.isSolved) {
-        undoButton.prop('disabled', true)
-        undoButton.attr('disabled', 'disabled') // Ensure attribute is present for CSS to update
-    } else {
-        undoButton.prop('disabled', false)
-        undoButton.removeAttr('disabled') // Ensure attribute is removed for CSS to update
-    }
-}
-
-// General Functions
-function _changeGridSize(newGridSize) {
-    if (newGridSize == _currentGridSize) {
-        return
-    }
-
-    _currentGridSize = Math.min(newGridSize, MAX_GRID_SIZE)
-    _currentGridSize = Math.max(_currentGridSize, MIN_GRID_SIZE)
-    _showHideButtonsAndCells()
-}
-
-function _showHideButtonsAndCells() {
-    for (let i = 1; i <= _currentGridSize; i++) {
-        $(`td[data-button="bn${i}"]`).show()
-    }
-
-    for (let i = _currentGridSize + 1; i <= MAX_GRID_SIZE; i++) {
-        $(`td[data-button="bn${i}"]`).hide()
-    }
-
-    for (let r = 0; r < _currentGridSize; r++) {
-        $('#r' + r).show()
-        for (let c = 0; c < _currentGridSize; c++) {
-            $(`#ce${r}_${c}`).show()
-        }
-        for (let c = _currentGridSize; c < MAX_GRID_SIZE; c++) {
-            $(`#ce${r}_${c}`).hide()
+        else if (resp && resp.message) {
+            console.error('Failed to generate a hint:', resp.message);
         }
     }
-    for (let r = _currentGridSize; r < MAX_GRID_SIZE; r++) {
-        $('#r' + r).hide()
-    }
-}
-
-function _createGrid() {
-    for (let r = 0; r < MAX_GRID_SIZE; r++) {
-        let row = `<tr class="row" id="r${r}" row="${r}">`
-        for (let c = 0; c < MAX_GRID_SIZE; c++) {
-            row += `<td class="cell" id="ce${r}_${c}" row="${r}" col="${c}"></td>`
+    async closeHintAsync() {
+        if (this.hintField) {
+            this.hintField.setHint(undefined);
+            this.hintField = null;
+            await this.showDialogAsync(false);
         }
-        row += '</tr>'
-        $('.container').append(row)
     }
-}
-
-function _restartTimer() {
-    _starttime = (new Date()).getTime()
-    _timer = setInterval(function () {
-        const diff = (new Date()).getTime() - _starttime
-        const minutes = Math.floor(diff / 60000)
-        const seconds = Math.floor(diff / 1000 - minutes * 60)
-        $('#time').text(((minutes < 10) ? '0' : '') + minutes + ':' + ((seconds < 10) ? '0' : '') + seconds)
-    }, 1000)
-}
-
-function _getURLParameter(name) {
-    if (!window.location.search) return null
-    const urlParams = new URLSearchParams(window.location.search)
-    return urlParams.get(name)
-}
-
-async function loadNewGame() {
-    showDialog(dialogs.LOADING)
-    clearInterval(_timer)
-    $('#generate-button').prop('disabled', true)
-    try {
-        const data = await _generate(_generateGridSize, _difficulty)
-        if (data.status === 0 && data.message.length > _minCodeSize) {
-            console.log('Game:', data.message)
-            _gameUrl = window.location.href.split('?')[0] + '?code=' + data.message
-            _gameCode = data.message
-            showDialog(dialogs.GENERATED)
-            return
-        } else {
-            console.error('Error generating game:', data.message)
+    positionHintDialog() {
+        if (!this.hintField) {
+            return;
         }
-    } catch (error) {
-        console.error('Error fetching game:', error)
+        const windowLayoutData = {
+            height: this.$(this.win).height(),
+            width: this.$(this.win).width(),
+            scrollX: this.win.scrollX,
+            scrollY: this.win.scrollY,
+        };
+        Popup.positionPopup(this.hintField.getElement()[0], this.$('#hint-dialog'), windowLayoutData);
     }
-    showDialog(false)
-    $('#generate-button').prop('disabled', false)
-}
-
-function _loadSettings() {
-    function loadSetting(sliderId, storageKey, defaultValue) {
-        const slider = $(`#${sliderId}`)
-        const storedValue = localStorage.getItem(storageKey)
-
-        let validatedValue = defaultValue
-        if (storedValue !== null) {
-            const value = Number(storedValue)
-            const min = Number(slider.attr('min'))
-            const max = Number(slider.attr('max'))
-
-            if (value >= min && value <= max) {
-                validatedValue = value
+    async showSolutionAsync() {
+        await this.showDialogAsync(false);
+        clearInterval(this.timer);
+        this.game.showSolution();
+        this.undoStack.clear();
+    }
+    undo() {
+        if (this.undoStack.length > 0 && !this.game.isSolved) {
+            const field = this.undoStack.pop();
+            const gameField = this.game.get(field.row, field.col);
+            gameField.copyFrom(field);
+            gameField.wrong = false;
+            this.game.selectCell(field.row, field.col);
+            gameField.render();
+        }
+    }
+    selectCell(row, col) {
+        this.game.selectCell(row, col);
+    }
+    renderUndoButton(length) {
+        const undoButton = this.$('#undo-button');
+        if (length == 0 || this.game.isSolved) {
+            undoButton.prop('disabled', true);
+            undoButton.attr('disabled', 'disabled'); // Ensure attribute is present for CSS to update
+        }
+        else {
+            undoButton.prop('disabled', false);
+            undoButton.removeAttr('disabled'); // Ensure attribute is removed for CSS to update
+        }
+    }
+    // General Functions
+    changeGridSize(newGridSize) {
+        if (newGridSize == this.currentGridSize) {
+            return;
+        }
+        this.currentGridSize = Math.min(newGridSize, MAX_GRID_SIZE);
+        this.currentGridSize = Math.max(this.currentGridSize, MIN_GRID_SIZE);
+        this.showHideButtonsAndCells();
+    }
+    showHideButtonsAndCells() {
+        for (let i = 1; i <= this.currentGridSize; i++) {
+            this.$(`td[data-button="bn${i}"]`).show();
+        }
+        for (let i = this.currentGridSize + 1; i <= MAX_GRID_SIZE; i++) {
+            this.$(`td[data-button="bn${i}"]`).hide();
+        }
+        for (let r = 0; r < this.currentGridSize; r++) {
+            this.$('#r' + r).show();
+            for (let c = 0; c < this.currentGridSize; c++) {
+                this.$(`#ce${r}_${c}`).show();
+            }
+            for (let c = this.currentGridSize; c < MAX_GRID_SIZE; c++) {
+                this.$(`#ce${r}_${c}`).hide();
             }
         }
-
-        slider.val(validatedValue)
-        $(`#${sliderId.replace('-slider', '')}`).text(validatedValue)
-        return validatedValue
+        for (let r = this.currentGridSize; r < MAX_GRID_SIZE; r++) {
+            this.$('#r' + r).hide();
+        }
     }
-
+    createGrid() {
+        for (let r = 0; r < MAX_GRID_SIZE; r++) {
+            let row = `<tr class="row" id="r${r}" row="${r}">`;
+            for (let c = 0; c < MAX_GRID_SIZE; c++) {
+                row += `<td class="cell" id="ce${r}_${c}" row="${r}" col="${c}"></td>`;
+            }
+            row += '</tr>';
+            this.$('.container').append(row);
+        }
+    }
+    restartTimer() {
+        this.starttime = new Date().getTime();
+        this.timer = setInterval(() => {
+            const diff = new Date().getTime() - this.starttime;
+            const minutes = Math.floor(diff / 60000);
+            const seconds = Math.floor(diff / 1000 - minutes * 60);
+            this.$('#time-counter').text((minutes < 10 ? '0' : '') +
+                minutes +
+                ':' +
+                (seconds < 10 ? '0' : '') +
+                seconds);
+        }, 1000);
+    }
+    getURLParameter(name) {
+        if (!this.win.location.search)
+            return null;
+        const urlParams = new URLSearchParams(this.win.location.search);
+        return urlParams.get(name);
+    }
+    removeURLParameter(paramKey) {
+        // Get the current URL and its search part
+        const url = new URL(this.win.location.href);
+        const searchParams = new URLSearchParams(url.search);
+        // Remove the specified parameter
+        searchParams.delete(paramKey);
+        // Update the URL without reloading the page
+        url.search = searchParams.toString();
+        this.win.history.replaceState({}, '', url);
+    }
+    async generateNewGameAsync() {
+        await this.showDialogAsync(dialogs.GENERATING_NEW_GAME);
+        clearInterval(this.timer);
+        this.$('#confirm-new-game-button').prop('disabled', true);
+        try {
+            const data = await api.generate(this.generateGridSize, this.generateDifficulty);
+            if (data.status === 0 && data.message.length > game_minCodeSize) {
+                console.log('Game:', data.message);
+                this.gameUrl =
+                    this.win.location.href.split('?')[0] + '?code=' + data.message;
+                this.gameCode = data.message;
+                await this._startNewGameAsync();
+                return;
+            }
+            else {
+                console.error('Error generating game:', data.message);
+            }
+        }
+        catch (error) {
+            console.error('Error fetching game:', error);
+        }
+        await this.showDialogAsync(false);
+        this.$('#confirm-new-game-button').prop('disabled', false);
+    }
+    loadSettings() {
+        var values = loadNewGameSettings(this.$, (key) => localStorage.getItem(key));
+        this.generateGridSize = values.generateGridSize;
+        this.generateDifficulty = values.generateDifficulty;
+    }
+    changeDifficulty() {
+        this.generateDifficulty = Number(this.$('#difficulty-slider').val());
+        this.$('#difficulty-text').text(this.generateDifficulty);
+        localStorage.setItem('generate.difficulty', String(this.generateDifficulty));
+    }
+    changeGenerateSize() {
+        this.generateGridSize = Number(this.$('#grid-size-slider').val());
+        this.$('#grid-size-text').text(this.generateGridSize);
+        localStorage.setItem('generate.gridSize', String(this.generateGridSize));
+    }
+    async startGameAsync() {
+        let hasGame = false;
+        if (this.gameCode && this.gameCode.length > game_minCodeSize) {
+            this.undoStack.clear();
+            this.$('.container').removeClass('finished');
+            await this.showDialogAsync(false);
+            const parsedGame = this.game.parseGame(this.gameCode);
+            if (parsedGame) {
+                this.game = parsedGame;
+                hasGame = true;
+                this.changeGridSize(this.game.size);
+                this._restoreGameState();
+                this.restartTimer();
+                this.renderCounters();
+            }
+        }
+        if (!hasGame) {
+            await this.generateNewGameAsync();
+        }
+    }
+    _restoreGameState() {
+        if (!this._tryLoadStateFromUrlParameter()) {
+            gameHistory.restoreGameState(this.gameCode, this.game);
+        }
+    }
+    _tryLoadStateFromUrlParameter() {
+        const stateUrlParameter = this.getURLParameter('state');
+        if (!stateUrlParameter) {
+            return false;
+        }
+        try {
+            this.removeURLParameter('state');
+            this.game.restoreStateBase64(stateUrlParameter);
+            this.saveState();
+            return true;
+        }
+        catch (ex) {
+            console.error(ex);
+            return false;
+        }
+    }
+    async showNewGameDialogWithCancelButtonAsync() {
+        await this.showDialogAsync(dialogs.NEW_GAME);
+        this.$('#cancel-new-game-button').show();
+    }
+    async showDialogAsync(dialog) {
+        this.$('#new-game-dialog').hide();
+        this.$('#generating-new-game-dialog').hide();
+        this.$('#solution-dialog').hide();
+        this.$('#restart-dialog').hide();
+        this.$('#about-dialog').hide();
+        this.$('#hint-dialog').hide();
+        if (dialog != dialogs.HINT) {
+            await this.closeHintAsync();
+        }
+        if (dialog) {
+            this.$('.dialog-outer-container').show();
+            switch (dialog) {
+                case dialogs.GENERATING_NEW_GAME:
+                    this.$('#generating-new-game-dialog').show();
+                    break;
+                case dialogs.NEW_GAME:
+                    this.$('#new-game-dialog').show();
+                    break;
+                case dialogs.SOLUTION:
+                    if (!this.game.isSolved) {
+                        this.$('#solution-dialog').show();
+                    }
+                    else {
+                        this.$('.dialog-outer-container').hide();
+                    }
+                    break;
+                case dialogs.RESTART:
+                    if (!this.game.isSolved) {
+                        this.$('#restart-dialog').show();
+                    }
+                    else {
+                        this.$('.dialog-outer-container').hide();
+                    }
+                    break;
+                case dialogs.ABOUT:
+                    const link = await this._getCurrentLinkAsync();
+                    this.$('#current-game-link').attr('href', link);
+                    this.$('#about-dialog').show();
+                    break;
+                case dialogs.HINT:
+                    this.$('#hint-dialog').show();
+                    break;
+            }
+        }
+        else {
+            this.$('.dialog-outer-container').hide();
+        }
+    }
+    async _startNewGameAsync() {
+        this.win.history.pushState({}, '', this.gameUrl);
+        await this.startGameAsync();
+    }
+    onKeyDown(e) {
+        if (this.game.isSolved)
+            return;
+        let handled = false;
+        const key = e.key;
+        if (this.handleCursorKey(e)) {
+            handled = true;
+        }
+        else if (key >= '0' && key <= '9') {
+            handled = this.handleDigitKey(Number(key));
+        }
+        else if (key == 'n') {
+            this.toggleNoteMode();
+            handled = true;
+        }
+        else if (key == 'z' && e.ctrlKey) {
+            this.undo();
+            handled = true;
+        }
+        else if (key === 'Backspace' || key === 'Delete') {
+            this.handleDelete();
+            handled = true;
+        }
+        if (handled) {
+            e.preventDefault();
+        }
+    }
+    handleCursorKey(e) {
+        switch (e.which) {
+            case 37: // left
+                this.game.moveSelection(-1, 0);
+                break;
+            case 38: // up
+                this.game.moveSelection(0, -1);
+                break;
+            case 39: // right
+                this.game.moveSelection(1, 0);
+                break;
+            case 40: // down
+                this.game.moveSelection(0, 1);
+                break;
+            default:
+                return false;
+        }
+        return true;
+    }
+    handleDigitKey(digit) {
+        const handled = digit <= this.currentGridSize;
+        if (handled) {
+            this.numberInput.handleDigit(digit, this.currentGridSize);
+        }
+        return handled;
+    }
+    handleNumberInput(num) {
+        if (num < 1 || num > this.currentGridSize) {
+            return;
+        }
+        const activeField = this.game.getActiveField();
+        if (!activeField || !activeField.isEditable()) {
+            return;
+        }
+        this.undoStack.push(activeField.copy());
+        if (this.isInNoteMode) {
+            activeField.setNote(num);
+        }
+        else {
+            activeField.setUser(num);
+            this.game.checkSolved();
+            if (this.game.isSolved) {
+                this.undoStack.clear();
+                this.$('.container').addClass('finished');
+                this._onResizeAsync();
+                clearInterval(this.timer);
+            }
+        }
+        this.saveState();
+    }
+    saveState() {
+        gameHistory.saveGameState(this.gameCode, this.game);
+    }
+    handleDelete() {
+        const field = this.game.getActiveField();
+        if (!field || !field.isEditable()) {
+            return;
+        }
+        this.undoStack.push(field.copy());
+        field.clear();
+    }
+    async _getCurrentLinkAsync() {
+        let link = this.win.location.href;
+        if (this.game) {
+            const stateBase64 = await this.game.dumpStateBase64();
+            link += `&state=${stateBase64}`;
+        }
+        return link;
+    }
+    async copyCurrentLinkAsync() {
+        try {
+            const link = await this._getCurrentLinkAsync();
+            await this.win.navigator.clipboard.writeText(link);
+            const copyBtn = this.$('#copy-link-button');
+            copyBtn.text('Link copied!');
+            setTimeout(() => copyBtn.text('🔗'), 1000);
+        }
+        catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    }
+    async _handleGameLoadAsync(popstate = false) {
+        const code = this.getURLParameter('code');
+        const currentKey = this.win.location.href;
+        if (code && code.length > game_minCodeSize) {
+            this.gameUrl = currentKey;
+            this.gameCode = code;
+            if (popstate) {
+                await this.startGameAsync();
+            }
+            else {
+                await this._startNewGameAsync();
+            }
+        }
+        else {
+            const latestKey = gameHistory.getLatestGameKey();
+            if (latestKey) {
+                // Reload the current page with the latest game code
+                this.win.location.href =
+                    this.win.location.href.split('?')[0] + '?code=' + latestKey;
+                return;
+            }
+            // Nothing stored, show new game dialog.
+            await this.showDialogAsync(dialogs.NEW_GAME);
+        }
+    }
+    async _onResizeAsync() {
+        await this.closeHintAsync();
+        if (this.win.innerWidth / 2 - 45 <
+            (this.$('.controls').position()?.left ?? 0)) {
+            // Large screen
+            this.$('#buttons-small').hide();
+            this.$('#buttons-large').show();
+            this.$('.cell').css({
+                'font-size': '22pt',
+                width: '41px',
+                height: '41px',
+            });
+            this.$('.mini').css('font-size', '9pt');
+            this.$('#hint-dialog').css('width', '235px');
+        }
+        else {
+            // Small screen
+            const cellwidth = Math.min(Math.floor(this.win.innerWidth / this.currentGridSize - 2), 41);
+            this.$('#buttons-small').show();
+            this.$('#buttons-large').hide();
+            this.$('.container').css({ margin: '5px 2px' });
+            this.$('.controls').css({ margin: '0px 2px' });
+            this.$('.cell').css({
+                'font-size': '17pt',
+                width: `${cellwidth}px`,
+                height: `${cellwidth}px`,
+            });
+            this.$('.mini').css('font-size', '8pt');
+            this.$('#hint-dialog').css('width', '150px');
+        }
+    }
+    // single public startup entry point for DOM initialisation
+    async startAsync() {
+        // initial UI setup
+        this.createGrid();
+        await this._onResizeAsync();
+        this.loadSettings();
+        await this._handleGameLoadAsync();
+        // event handlers for UI elements
+        this.$('td[id^="ce"]').on('click', (evt) => {
+            // Game fields
+            const el = evt.currentTarget;
+            const row = Number(this.$(el).attr('row'));
+            const col = Number(this.$(el).attr('col'));
+            this.selectCell(row, col);
+        });
+        this.$('td[data-button^="bn"]').on('click', (evt) => {
+            // Number buttons
+            const el = evt.currentTarget;
+            const num = Number(this.$(el).text());
+            this.handleNumberInput(num);
+        });
+        // wire page-level events here so they can call private methods
+        this.win.addEventListener('popstate', async () => {
+            await this._handleGameLoadAsync(true);
+        });
+        this.$(document).on('keydown', (e) => {
+            this.onKeyDown(e);
+        });
+        this.$(this.win).on('resize', async () => {
+            await this._onResizeAsync();
+        });
+        // Controls wired from index.html
+        this.$('#undo-button').on('click', () => this.undo());
+        this.$('#toggle-notes-mode-button').on('click', () => this.toggleNoteMode());
+        this.$('#check-button').on('click', () => this.check());
+        this.$('#show-hint-button').on('click', async () => await this.generateAndDisplayHintAsync());
+        this.$('#show-solution-button').on('click', async () => await this.showDialogAsync(dialogs.SOLUTION));
+        this.$('#show-new-game-dialog-button').on('click', async () => await this.showNewGameDialogWithCancelButtonAsync());
+        this.$('#show-restart-dialog-button').on('click', async () => await this.showDialogAsync(dialogs.RESTART));
+        this.$('#show-about-dialog-button').on('click', async () => await this.showDialogAsync(dialogs.ABOUT));
+        this.$('#grid-size-slider').on('input', () => this.changeGenerateSize());
+        this.$('#difficulty-slider').on('input', () => this.changeDifficulty());
+        this.$('#confirm-new-game-button').on('click', async () => await this.generateNewGameAsync());
+        this.$('#cancel-new-game-button').on('click', async () => await this.showDialogAsync(false));
+        this.$('#confirm-show-solution-button').on('click', async () => await this.showSolutionAsync());
+        this.$('#confirm-restart-button').on('click', async () => await this.restartAsync());
+        // Copy link and force-update actions
+        this.$('#copy-link-button').on('click', async () => await this.copyCurrentLinkAsync());
+        // The force-update action proper is registered in a script block in index.html
+        this.$('#force-update').on('click', async () => await this.showDialogAsync(false));
+        // Hint dialog close handlers (close the hint on click)
+        this.$('#hint-dialog').on('click', async () => await this.closeHintAsync());
+        this.$('#hint-close').on('click', async (e) => {
+            e.stopPropagation();
+            await this.closeHintAsync();
+        });
+        // generic close buttons for dialogs (hide overlay)
+        this.$('.close-button')
+            .not('#hint-close')
+            .on('click', async () => await this.showDialogAsync(false));
+    }
+}
+function getButtonColors(darkMode) {
+    const buttonColorsLight = {
+        BUTTONDOWN: '#335',
+        BUTTONUP: '#b1cffc',
+    };
+    const buttonColorsDark = {
+        BUTTONDOWN: '#e7d9cdff' /* color-button-active */,
+        BUTTONUP: '#555' /* color-button-background */,
+    };
+    return darkMode ? buttonColorsDark : buttonColorsLight;
+}
+function loadNewGameSettings($$, getStoredValue) {
+    function loadSetting(sliderId, storageKey, defaultValue) {
+        const slider = $$(`#${sliderId}`);
+        const storedValue = getStoredValue(storageKey);
+        let validatedValue = defaultValue;
+        if (storedValue !== null) {
+            const value = Number(storedValue);
+            const min = Number(slider.attr('min'));
+            const max = Number(slider.attr('max'));
+            if (value >= min && value <= max) {
+                validatedValue = value;
+            }
+        }
+        slider.val(validatedValue);
+        $$(`#${sliderId.replace('-slider', '-text')}`).text(validatedValue);
+        return validatedValue;
+    }
     try {
-        _generateGridSize = loadSetting('grid-size-slider', 'generate.gridSize', DEFAULT_GRID_SIZE)
-        _difficulty = loadSetting('difficulty-slider', 'generate.difficulty', DEFAULT_DIFFICULTY)
-    } catch (error) {
-        console.warn('Failed to load settings:', error, "Using defaults.")
-        _generateGridSize = DEFAULT_GRID_SIZE
-        _difficulty = DEFAULT_DIFFICULTY
+        return {
+            generateGridSize: loadSetting('grid-size-slider', 'generate.gridSize', DEFAULT_GRID_SIZE),
+            generateDifficulty: loadSetting('difficulty-slider', 'generate.difficulty', DEFAULT_DIFFICULTY),
+        };
+    }
+    catch (error) {
+        console.warn('Failed to load settings:', error, 'Using defaults.');
+        return {
+            generateGridSize: DEFAULT_GRID_SIZE,
+            generateDifficulty: DEFAULT_DIFFICULTY,
+        };
     }
 }
-
-function changeDifficulty() {
-    _difficulty = Number($('#difficulty-slider').val())
-    $('#difficulty').text(_difficulty)
-    localStorage.setItem('generate.difficulty', _difficulty)
-}
-
-function changeGenerateSize() {
-    _generateGridSize = Number($('#grid-size-slider').val())
-    $('#grid-size').text(_generateGridSize)
-    localStorage.setItem('generate.gridSize', _generateGridSize)
-}
-
-async function _startGame() {
-    let hasGame = false
-    if (_gameCode && _gameCode.length > _minCodeSize) {
-        _undoStack.clear()
-        $('.container').removeClass('finished')
-        showDialog(false)
-
-        _game = _game.parseGame(_gameCode)
-        if (_game) {
-            hasGame = true
-
-            _changeGridSize(_game.size)
-
-            _gameHistory.restoreGameState(_gameCode, _game)
-
-            _restartTimer()
-            _renderCounters()
-        }
-    }
-
-    if (!hasGame) {
-        await loadNewGame()
-    }
-}
-
-function loadNewGameAgain() {
-    showDialog(dialogs.WELCOME)
-    $('#cancel-new-game').show()
-}
-
-function showDialog(dialog) {
-    $('#welcome-dialog').hide()
-    $('#start-dialog').hide()
-    $('#loading-dialog').hide()
-    $('#solution-dialog').hide()
-    $('#restart-dialog').hide()
-    $('#about-dialog').hide()
-    $('#hint-dialog').hide()
-    if (dialog != dialogs.HINT) {
-        closeHint()
-    }
-
-    if (dialog) {
-        $('.dialog-outer-container').show()
-        switch (dialog) {
-            case dialogs.LOADING:
-                $('#loading-dialog').show()
-                break
-            case dialogs.WELCOME:
-                $('#welcome-dialog').show()
-                break
-            case dialogs.GENERATED:
-                window.history.pushState({}, '', _gameUrl)
-                _startGame()
-                break
-            case dialogs.SOLUTION:
-                if (!_game.isSolved) {
-                    $('#solution-dialog').show()
-                } else {
-                    $('.dialog-outer-container').hide()
-                }
-                break
-            case dialogs.RESTART:
-                if (!_game.isSolved) {
-                    $('#restart-dialog').show()
-                } else {
-                    $('.dialog-outer-container').hide()
-                }
-                break
-            case dialogs.ABOUT:
-                $('#current-game').attr('href', window.location.href)
-                $('#about-dialog').show()
-                break
-            case dialogs.HINT:
-                $('#hint-dialog').show()
-                break
-        }
-    } else {
-        $('.dialog-outer-container').hide()
-    }
-}
-
-function _onKeyDown(e) {
-    if (_game.isSolved) return
-
-    let handled = false
-    const key = e.key
-    if (_handleCursorKey(e)) {
-        handled = true
-    } else if (key >= '0' && key <= '9') {
-        _handleNumberKey(Number(key))
-        handled = true
-    } else if (key == 'n') {
-        toggleNoteMode()
-        handled = true
-    } else if (key == 'z' && e.ctrlKey) {
-        undo()
-        handled = true
-    } else if (key === 'Backspace' || key === 'Delete') {
-        _handleDelete()
-        handled = true
-    }
-
-    if (handled) {
-        e.preventDefault()
-    }
-}
-
-function _handleCursorKey(e) {
-    switch (e.which) {
-        case 37: // left
-            _game.moveSelection(-1, 0)
-            break
-        case 38: // up
-            _game.moveSelection(0, -1)
-            break
-        case 39: // right
-            _game.moveSelection(1, 0)
-            break
-        case 40: // down
-            _game.moveSelection(0, 1)
-            break
-        default:
-            return false
-    }
-
-    return true
-}
-
-let _firstDigit = null
-let _digitTimer = null
-const _twoDigitTimeout = 500
-function _handleNumberKey(num) {
-    if (_firstDigit == null) {
-        if (_currentGridSize < 10 || num !== 1) {
-            _handleNumberInput(num)
-        } else {
-            _firstDigit = num
-            _digitTimer = setTimeout(() => {
-                _handleNumberInput(_firstDigit)
-                _firstDigit = null
-            }, _twoDigitTimeout)
-        }
-    } else {
-        clearTimeout(_digitTimer)
-        const firstNum = _firstDigit
-        const combinedNum = _firstDigit * 10 + num
-        _firstDigit = null
-        if (combinedNum <= _currentGridSize) {
-            _handleNumberInput(combinedNum)
-        } else {
-            _handleNumberInput(firstNum)
-            _handleNumberKey(num)
-        }
-    }
-}
-
-function _handleNumberInput(num) {
-    if (num < 1 || num > _currentGridSize) {
-        return
-    }
-
-    const activeField = _game.getActiveField()
-    if (!activeField || !activeField.isEditable()) {
-        return
-    }
-
-    _undoStack.push(activeField.copy())
-
-    if (_noteMode) {
-        activeField.setNote(num)
-    } else {
-        activeField.setUser(num)
-        _game.checkSolved()
-
-        if (_game.isSolved) {
-            _undoStack.clear()
-            $('.container').addClass('finished')
-            _onResize()
-            clearInterval(_timer)
-        }
-    }
-
-    _saveState()
-}
-
-function _saveState() {
-    _gameHistory.saveGameState(_gameCode, _game)
-}
-
-function _handleDelete() {
-    const field = _game.getActiveField()
-    if (!field || !field.isEditable()) {
-        return
-    }
-
-    _undoStack.push(field.copy())
-    field.clear()
-}
-
-async function copyCurrentLink() {
-    try {
-        await navigator.clipboard.writeText(window.location.href)
-        const copyBtn = $('.copy-link')
-        copyBtn.text('Link copied!')
-        setTimeout(() => copyBtn.text('🔗'), 1000)
-    } catch (err) {
-        console.error('Failed to copy:', err)
-    }
-}
-
-$(document).ready(async function () {
-    await _modulePromise
-    _createGrid()
-    _onResize()
-    _loadSettings()
-    _handleGameLoad()
-    $('td[id^="ce"]').click(function () { // Game fields
-        const row = Number($(this).attr('row'))
-        const col = Number($(this).attr('col'))
-        _game.selectCell(row, col)
-    })
-    $('td[data-button^="bn"]').click(function () { // Number buttons
-        const num = Number($(this).text())
-        _handleNumberInput(num)
-    })
-    _onResize()
-})
-
-window.addEventListener('popstate', function () {
-    _handleGameLoad(popstate = true)
-})
-
-function _handleGameLoad(popstate = false) {
-    const code = _getURLParameter('code')
-    const currentKey = window.location.href
-
-    if (code && code.length > _minCodeSize) {
-        _gameUrl = currentKey
-        _gameCode = code
-        if (popstate) {
-            _startGame()
-        } else {
-            showDialog(dialogs.GENERATED)
-        }
-    } else {
-        const latestKey = _gameHistory.getLatestGameKey()
-        if (latestKey) {
-            // Reload the current page with the latest game code
-            window.location.href = window.location.href.split('?')[0] + '?code=' + latestKey
-            return
-        }
-
-        // Nothing stored, show welcome dialog.
-        showDialog(dialogs.WELCOME)
-    }
-}
-
-$(document).keydown(_onKeyDown)
-
-$(window).resize(_onResize)
-function _onResize() {
-    closeHint()
-    if (window.innerWidth / 2 - 45 < $('.controls').position().left) { // Large screen
-        $('#buttons-small').hide()
-        $('#buttons-large').show()
-        $('.cell').css({ 'font-size': '22pt', width: '41px', height: '41px' })
-        $('.mini').css('font-size', '9pt')
-        $('#hint-dialog').css('width', '235px')
-    } else { // Small screen
-        const cellwidth = Math.min(Math.floor(window.innerWidth / _currentGridSize - 2), 41)
-        $('#buttons-small').show()
-        $('#buttons-large').hide()
-        $('.container').css({ margin: '5px 2px' })
-        $('.controls').css({ margin: '0px 2px' })
-        $('.cell').css({ 'font-size': '17pt', width: `${cellwidth}px`, height: `${cellwidth}px` })
-        $('.mini').css('font-size', '8pt')
-        $('#hint-dialog').css('width', '150px')
-    }
-}
-

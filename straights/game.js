@@ -1,282 +1,284 @@
 // SPDX-FileCopyrightText: 2020 Luis Walter, 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-
-const modes = { USER: 0, WHITEKNOWN: 1, BLACK: 2, BLACKKNOWN: 3 }
-
-const MIN_GRID_SIZE_V128 = 4
-const minCodeSizeV2 = 82
-const minCodeSizeV128 = (
-    8 /* ENCODINGVERSION */ +
+var _a;
+import { BitmaskEncoder } from './encoder.js';
+const modes = {
+    USER: 0,
+    WHITEKNOWN: 1,
+    BLACK: 2,
+    BLACKKNOWN: 3,
+};
+const MIN_GRID_SIZE_V128 = 4;
+const minCodeSizeV2 = 82;
+const minCodeSizeV128 = (8 /* ENCODINGVERSION */ +
     5 /* size */ +
-    2 * MIN_GRID_SIZE_V128 * MIN_GRID_SIZE_V128 /* black, known */
-) / 6
-
-export const minCodeSize = Math.min(minCodeSizeV2, minCodeSizeV128)
-
-class Field {
+    2 * MIN_GRID_SIZE_V128 * MIN_GRID_SIZE_V128) /* black, known */ /
+    6;
+export const minCodeSize = Math.min(minCodeSizeV2, minCodeSizeV128);
+export class Field {
+    row;
+    col;
+    game;
+    value;
+    mode;
+    wrong;
+    hint;
+    isShowingSolution;
+    user;
+    notes;
     constructor(row, col, game) {
-        this.row = row
-        this.col = col
-        this.game = game
-
+        this.row = row;
+        this.col = col;
+        this.game = game;
         // fixed after initialization
-        this.value = undefined
-        this.mode = undefined
-
+        this.value = undefined;
+        this.mode = undefined;
         // derived, only used when checking
-        this.wrong = false
-        this.hint = undefined
-        this.isShowingSolution = false
-
+        this.wrong = false;
+        this.hint = undefined;
+        this.isShowingSolution = false;
         // working data, edited by the user
-        this.user = undefined
-        this.notes = new Set()
+        this.user = undefined;
+        this.notes = new Set();
     }
-
     getSelector() {
         return `#ce${this.row}_${this.col}`;
     }
-
     setUser(input) {
         if (this.isEditable()) {
-            this.wrong = false
-            this.hint = undefined
+            this.wrong = false;
+            this.hint = undefined;
             if (this.user === input) {
-                this.user = undefined
-            } else {
-                this.user = input
+                this.user = undefined;
+                if (this.notes.size === 1) {
+                    // When we only have a single note we automatically
+                    // set the user value to that note. But here, we want
+                    // to switch to note mode. Therefore, we need to remove
+                    // the single note.
+                    this.notes.clear();
+                }
             }
-            this.render()
+            else {
+                this.user = input;
+            }
+            this.render();
         }
     }
-
     isActive() {
-        return this.game.activeFieldIndex &&
+        return (this.game.activeFieldIndex &&
             this.game.activeFieldIndex.col === this.col &&
-            this.game.activeFieldIndex.row === this.row;
+            this.game.activeFieldIndex.row === this.row);
     }
-
     isEditable() {
         return this.mode === modes.USER;
     }
-
     setNote(value) {
         if (this.isEditable()) {
-            this.wrong = false
-            this.hint = undefined
-            this.user = undefined
+            this.wrong = false;
+            this.hint = undefined;
+            this.user = undefined;
             if (!this.notes.delete(value)) {
-                this.notes.add(value)
+                this.notes.add(value);
             }
-            this.render()
+            this.render();
         }
     }
-
     clear() {
         if (this.isEditable()) {
             if (this.user) {
-                this.user = undefined
-            } else {
-                this.notes.clear()
+                this.user = undefined;
             }
-
-            this.wrong = false
-            this.hint = undefined
-            this.render()
+            else {
+                this.notes.clear();
+            }
+            this.wrong = false;
+            this.hint = undefined;
+            this.render();
         }
     }
-
     #isSolvedCorrectly() {
         if (!this.isEditable()) {
-            return 1
+            return 1;
         }
-
         if (!this.user) {
-            return 0
+            return 0;
         }
-
         if (this.user === this.value) {
-            return 1
+            return 1;
         }
-
-        return -1
+        return -1;
     }
-
     isSolved() {
-        return this.#isSolvedCorrectly() === 1
+        return this.#isSolvedCorrectly() === 1;
     }
-
     checkWrong(checkNotes = false) {
-        const correct = this.#isSolvedCorrectly()
+        const correct = this.#isSolvedCorrectly();
         switch (correct) {
             case -1:
-                this.wrong = true
-                this.render()
+                this.wrong = true;
+                this.render();
                 break;
             case 0:
-                if (checkNotes
-                    && this.notes.size != 0
-                    && !this.notes.has(this.value)) {
-                    this.wrong = true
-                    this.render()
+                if (checkNotes &&
+                    this.notes.size != 0 &&
+                    !this.notes.has(this.value)) {
+                    this.wrong = true;
+                    this.render();
                 }
                 break;
             default:
                 break;
         }
     }
-
     showSolution() {
-        this.isShowingSolution = true
-        this.wrong = this.#isSolvedCorrectly() === -1
-        this.render()
+        this.isShowingSolution = true;
+        this.wrong = this.#isSolvedCorrectly() === -1;
+        this.render();
     }
-
     setHint(number) {
-        this.hint = number
+        this.hint = number;
         if (number && this.notes.size === 0) {
             for (let i = 1; i <= this.game.size; i++) {
-                this.notes.add(i)
+                this.notes.add(i);
             }
         }
-
-        this.render()
+        this.render();
     }
-
     copy() {
-        const field = new Field(this.row, this.col, this.game)
-
-        field.value = this.value
-        field.mode = this.mode
-
-        field.wrong = this.wrong
-        field.isShowingSolution = this.isShowingSolution
-
-        field.copyFrom(this)
-
-        return field
+        const field = new Field(this.row, this.col, this.game);
+        field.value = this.value;
+        field.mode = this.mode;
+        field.wrong = this.wrong;
+        field.isShowingSolution = this.isShowingSolution;
+        field.copyFrom(this);
+        return field;
     }
-
     copyFrom(field) {
-        this.user = field.user
-        this.notes.clear()
+        this.user = field.user;
+        this.notes.clear();
         for (const note of field.notes) {
-            this.notes.add(note)
+            this.notes.add(note);
         }
     }
-
+    /**
+     * Retrieves the single DOM element associated with the field.
+     * @returns A jQuery object containing exactly one HTMLElement.
+     * @throws {Error} If no element is found or if multiple elements are found.
+     */
     getElement() {
-        return this.game.$(this.getSelector())
+        const result = this.game.$(this.getSelector());
+        if (result.length == 0) {
+            throw new Error(`Element not found: ${this.getSelector()}`);
+        }
+        if (result.length > 1) {
+            throw new Error(`Multiple elements found: ${this.getSelector()}`);
+        }
+        return result;
     }
-
-    reset() {
-        this.user = undefined
-        this.notes.clear()
-        this.wrong = false
-        this.hint = undefined
-        this.isShowingSolution = false
-        this.render()
+    reset(template = null) {
+        this.user = undefined;
+        this.notes.clear();
+        this.wrong = false;
+        this.hint = undefined;
+        this.isShowingSolution = false;
+        if (template) {
+            this.copyFrom(template);
+        }
+        this.render();
     }
-
     #getBackgroundColor() {
-        const colors = this.game.colors
-        if (this.mode === modes.BLACK ||
-            this.mode === modes.BLACKKNOWN) {
-            return colors.BG_BLACK
+        const colors = this.game.colors;
+        if (this.mode === modes.BLACK || this.mode === modes.BLACKKNOWN) {
+            return colors.BG_BLACK;
         }
-
         if (this.mode === modes.WHITEKNOWN) {
-            return colors.BG_WHITEKNOWN
+            return colors.BG_WHITEKNOWN;
         }
-
         if (this.hint) {
-            return colors.BG_HINT
+            return colors.BG_HINT;
         }
-
         if (this.isActive()) {
-            return this.wrong
-                ? colors.BG_USER_WRONG_ACTIVE
-                : colors.BG_USER_ACTIVE
+            return this.wrong ? colors.BG_USER_WRONG_ACTIVE : colors.BG_USER_ACTIVE;
         }
-
-        return this.wrong
-            ? colors.BG_USER_WRONG
-            : colors.BG_USER
+        return this.wrong ? colors.BG_USER_WRONG : colors.BG_USER;
     }
-
     #getTextColor() {
-        const colors = this.game.colors
+        const colors = this.game.colors;
         if (this.mode === modes.BLACKKNOWN || this.mode === modes.BLACK) {
-            return colors.FG_BLACK
+            return colors.FG_BLACK;
         }
-
         if (!this.isEditable()) {
-            return colors.FG_WHITEKNOWN
+            return colors.FG_WHITEKNOWN;
         }
-
         if (this.wrong) {
-            return colors.FG_USER_WRONG
+            return colors.FG_USER_WRONG;
         }
-
         if (this.isShowingSolution) {
             if (this.user !== this.value) {
-                return colors.FG_SOLUTION
+                return colors.FG_SOLUTION;
             }
         }
-
-        return colors.FG_USER
+        return colors.FG_USER;
     }
-
     render() {
-        const element = this.getElement()
-        element.empty()
-        element.css('background-color', this.#getBackgroundColor())
-        element.css('color', this.#getTextColor())
+        const element = this.getElement();
+        element.empty();
+        element.css('background-color', this.#getBackgroundColor());
+        element.css('color', this.#getTextColor());
         if (this.isEditable()) {
             if (this.isShowingSolution) {
-                element.text(this.value)
-            } else {
+                element.text(this.value);
+            }
+            else {
                 if (this.user) {
-                    element.text(this.user)
-                } else if (this.notes.size > 0) {
-                    let notes = '<table class="mini" cellspacing="0">'
+                    element.text(this.user);
+                }
+                else if (this.notes.size > 0) {
+                    let notes = '<table class="mini" cellspacing="0">';
                     for (let i = 1; i <= this.game.size; i++) {
-                        if ((i - 1) % 3 === 0) notes += '<tr>'
+                        if ((i - 1) % 3 === 0)
+                            notes += '<tr>';
                         if (this.notes.has(i)) {
-                            const class_attribute = this.hint === i ? ' class="hint"' : ''
-                            notes += `<td${class_attribute}>${i}</td>`
-                        } else {
-                            notes += `<td class="transparent">${i}</td>`
+                            const class_attribute = this.hint === i ? ' class="hint"' : '';
+                            notes += `<td${class_attribute}>${i}</td>`;
                         }
-                        if (i % 3 === 0) notes += '</tr>'
+                        else {
+                            notes += `<td class="transparent">${i}</td>`;
+                        }
+                        if (i % 3 === 0)
+                            notes += '</tr>';
                     }
-                    notes += '</table>'
-                    element.append(notes)
+                    notes += '</table>';
+                    element.append(notes);
                 }
             }
-        } else if (this.mode === modes.BLACKKNOWN) {
-            element.text(this.value)
-        } else if (this.mode === modes.WHITEKNOWN) {
-            element.text(this.value)
+        }
+        else if (this.mode === modes.BLACKKNOWN) {
+            element.text(this.value);
+        }
+        else if (this.mode === modes.WHITEKNOWN) {
+            element.text(this.value);
         }
     }
-
     toJsonArray() {
         if (this.mode === modes.BLACK) {
             return [0]; // black empty field
-        } else if (this.mode === modes.BLACKKNOWN) {
+        }
+        else if (this.mode === modes.BLACKKNOWN) {
             return [-this.value]; // black known field
-        } else if (this.mode === modes.WHITEKNOWN) {
+        }
+        else if (this.mode === modes.WHITEKNOWN) {
             return [this.value]; // white known field
-        } else if (this.user) {
+        }
+        else if (this.user) {
             return [this.user]; // white field with user guess
-        } else {
+        }
+        else {
             return Array.from(this.notes); // white field with notes
         }
     }
 }
-
 // class to store and modify the current game state
 export class Game {
     static gameColorsLight = {
@@ -292,8 +294,7 @@ export class Game {
         BG_USER_WRONG_ACTIVE: '#eeaaff',
         BG_WHITEKNOWN: '#ffffff',
         BG_HINT: '#ffff99',
-    }
-
+    };
     static gameColorsDark = {
         FG_BLACK: '#aaaaaa',
         FG_USER: '#003378',
@@ -307,291 +308,297 @@ export class Game {
         BG_USER_WRONG_ACTIVE: '#eeaaff',
         BG_WHITEKNOWN: '#aaaaaa',
         BG_HINT: '#ffff99',
-    }
-
+    };
+    $;
+    colors;
+    darkMode;
+    size;
+    data;
+    isSolved;
+    activeFieldIndex;
+    check_count;
+    hint_count;
     constructor($, darkMode, size = 0) {
-        this.$ = $
-        this.colors = darkMode ? Game.gameColorsDark : Game.gameColorsLight
-        this.darkMode = darkMode
-        this.size = size
-        this.data = []
-        this.activeFieldIndex = null
-        this.isSolved = false
+        this.$ = $;
+        this.colors = darkMode ? _a.gameColorsDark : _a.gameColorsLight;
+        this.darkMode = darkMode;
+        this.size = size;
+        this.data = [];
+        this.activeFieldIndex = null;
+        this.isSolved = false;
         for (let r = 0; r < size; r++) {
-            this.data.push([])
+            this.data.push([]);
             for (let c = 0; c < size; c++) {
-                this.data[r].push(new Field(r, c, this))
+                this.data[r].push(new Field(r, c, this));
             }
         }
-
-        this.check_count = 0
-        this.hint_count = 0
+        this.check_count = 0;
+        this.hint_count = 0;
     }
-
     get(row, col) {
-        return this.data[row][col]
+        return this.data[row][col];
     }
-
     dumpState() {
-        const fieldData = this.data.map(row =>
-            row.map(field => ({
-                user: field.user,
-                notes: Array.from(field.notes),
-            })))
-
-        const result =
-        {
+        const fieldData = this.data.map((row) => row.map((field) => ({
+            user: field.user,
+            notes: Array.from(field.notes),
+        })));
+        const result = {
             check_count: this.check_count,
             hint_count: this.hint_count,
             data: fieldData,
-        }
-
-        return result
+        };
+        return result;
     }
-
     restoreState(dumpedState) {
-        if (Object.hasOwn(dumpedState, "check_count")) {
-            this.check_count = dumpedState.check_count
-            this.hint_count = dumpedState.hint_count
-            this.restoreState(dumpedState.data)
+        if (Object.hasOwn(dumpedState, 'check_count')) {
+            // new format including check and hint count
+            const ds = dumpedState;
+            this.check_count = ds.check_count;
+            this.hint_count = ds.hint_count;
+            this.restoreState(ds.data);
         }
         else {
-            dumpedState.forEach((row, r) => {
+            // old format (just field data) also used in
+            // recursive call from above
+            const ds = dumpedState;
+            ds.forEach((row, r) => {
                 row.forEach((field, c) => {
-                    const gameField = this.get(r, c)
-                    gameField.copyFrom(field)
-                    gameField.render()
-                })
-            })
+                    const gameField = this.get(r, c);
+                    gameField.copyFrom(field);
+                    gameField.render();
+                });
+            });
         }
     }
-
-    #setValues(row, col, mode, value) {
-        const field = new Field(row, col, this)
-        this.data[row][col] = field
-        this.data[row][col].mode = mode
-        this.data[row][col].value = value
-        field.render()
+    #getEncoder() {
+        return new BitmaskEncoder({
+            compressionThreshold: 48,
+            minCompressionRatio: 0.9,
+            maxN: 12,
+        });
     }
-
-    #forEachField(iteratorFunction) {
+    #getUserFields() {
+        return Array.from(this.loopFields(), (x) => x.field).filter((x) => x.mode === modes.USER);
+    }
+    async dumpStateBase64() {
+        const encoder = this.#getEncoder();
+        var data = this.#getUserFields().map((f) => (f.user ? [f.user] : f.notes));
+        const encoded = await encoder.encode(this.size, data);
+        return encoded.base64Data;
+    }
+    async restoreStateBase64(base64Data) {
+        const userFields = this.#getUserFields();
+        const count = userFields.length;
+        const decoded = await this.#getEncoder().decode({ base64Data, count }, this.size);
+        for (let i = 0; i < count; i++) {
+            userFields[i].reset(toFieldUserData(decoded[i]));
+        }
+    }
+    #setValues(row, col, mode, value) {
+        const field = new Field(row, col, this);
+        this.data[row][col] = field;
+        this.data[row][col].mode = mode;
+        this.data[row][col].value = value;
+        field.render();
+    }
+    *loopFields() {
         for (let r = 0; r < this.size; r++) {
             for (let c = 0; c < this.size; c++) {
-                iteratorFunction(this.data[r][c], r, c)
+                const field = this.data[r][c];
+                yield { field, row: r, col: c };
             }
         }
     }
-
+    #forEachField(iteratorFunction) {
+        for (const { field, row, col } of this.loopFields()) {
+            iteratorFunction(field, row, col);
+        }
+    }
     showSolution() {
         if (this.isSolved) {
-            return
+            return;
         }
-
-        this.isSolved = true
-        this.#unselectActiveField()
-        this.#forEachField(field => {
-            field.showSolution()
-        })
+        this.isSolved = true;
+        this.#unselectActiveField();
+        this.#forEachField((field) => {
+            field.showSolution();
+        });
     }
-
     #checkWrong(checkNotes = false) {
-        let result = false
-        this.#forEachField(field => {
-            field.checkWrong(checkNotes)
+        let result = false;
+        this.#forEachField((field) => {
+            field.checkWrong(checkNotes);
             if (field.wrong) {
-                result = true
+                result = true;
             }
-        })
-
-        return result
+        });
+        return result;
     }
-
     checkSolved() {
         if (this.isSolved) {
-            return
+            return;
         }
-
-        let finished = true
-        this.#forEachField(field => {
-            if (!field.user && field.notes.size == 1)
-            {
-                field.user = field.notes.values().next().value
-                field.render()
+        let finished = true;
+        this.#forEachField((field) => {
+            if (!field.user && field.notes.size == 1) {
+                field.user = field.notes.values().next().value;
+                field.notes.clear();
+                field.render();
             }
-
             if (!field.isSolved()) {
-                finished = false
+                finished = false;
             }
-        })
-
-        this.isSolved = finished
+        });
+        this.isSolved = finished;
         if (this.isSolved) {
-            this.#unselectActiveField()
+            this.#unselectActiveField();
         }
     }
-
     checkForHint() {
-        this.checkSolved()
-
+        this.checkSolved();
         function getResult(solved, wrong) {
-            const result = { isSolved: solved, isWrong: wrong }
-            return result
+            const result = { isSolved: solved, isWrong: wrong };
+            return result;
         }
-
         if (this.isSolved) {
-            return getResult(true, false)
+            return getResult(true, false);
         }
-
-        this.hint_count++
+        this.hint_count++;
         if (this.#checkWrong(false) || this.#checkWrong(true)) {
-            return getResult(false, true)
+            return getResult(false, true);
         }
-
-        return getResult(false, false)
+        return getResult(false, false);
     }
-
     check() {
-        this.checkSolved()
+        this.checkSolved();
         if (this.isSolved) {
-            return
+            return;
         }
-
-        this.check_count++
-        this.#checkWrong()
+        this.check_count++;
+        this.#checkWrong();
     }
-
     restart() {
-        this.isSolved = false
-
-        this.#forEachField(field => {
-            field.reset()
-        })
+        this.isSolved = false;
+        this.#forEachField((field) => field.reset());
     }
-
     getActiveField() {
         return this.activeFieldIndex
             ? this.get(this.activeFieldIndex.row, this.activeFieldIndex.col)
             : null;
     }
-
     #unselectActiveField() {
-        const activeField = this.getActiveField()
+        const activeField = this.getActiveField();
         if (activeField) {
-            this.activeFieldIndex = null
-            activeField.render()
+            this.activeFieldIndex = null;
+            activeField.render();
         }
     }
-
     selectCell(row, col) {
         if (!this.isSolved && this.get(row, col).isEditable()) {
             // Reset previously selected field
-            this.#unselectActiveField()
-
+            this.#unselectActiveField();
             // Change background of just selected field
-            this.activeFieldIndex = { row, col }
-            this.getActiveField().render()
+            this.activeFieldIndex = { row, col };
+            this.getActiveField().render();
         }
     }
-
     moveSelection(dx, dy) {
         if (!this.activeFieldIndex) {
-            return
+            return;
         }
-        const { row, col } = this.activeFieldIndex
-        var newCell = this.#findNextEditableCell(row, col, dy, dx)
-        this.selectCell(newCell.row, newCell.col)
+        const { row, col } = this.activeFieldIndex;
+        var newCell = this.#findNextEditableCell(row, col, dy, dx);
+        this.selectCell(newCell.row, newCell.col);
     }
-
     #findNextEditableCell(row, col, rowDelta, colDelta) {
-        let newRow = row
-        let newCol = col
+        let newRow = row;
+        let newCol = col;
         do {
-            newRow = (newRow + rowDelta + this.size) % this.size
-            newCol = (newCol + colDelta + this.size) % this.size
-        }
-        while (
-            !this.get(newRow, newCol).isEditable() &&
-            (newRow !== row || newCol != col))
-
-        return { row: newRow, col: newCol }
+            newRow = (newRow + rowDelta + this.size) % this.size;
+            newCol = (newCol + colDelta + this.size) % this.size;
+        } while (!this.get(newRow, newCol).isEditable() &&
+            (newRow !== row || newCol != col));
+        return { row: newRow, col: newCol };
     }
-
     // Parse game
     #parseGameV128(binary) {
-        const size = parseInt(binary.substring(0, 5), 2)
-        const pos = 5
-
-        const bitsPerNumber = Math.floor(Math.log2(size - 1)) + 1
-        const bitsPerField = 2 + bitsPerNumber // black + known + number
-        const result = new Game(this.$, this.darkMode, size)
-
+        const size = parseInt(binary.substring(0, 5), 2);
+        const pos = 5;
+        const bitsPerNumber = Math.floor(Math.log2(size - 1)) + 1;
+        const bitsPerField = 2 + bitsPerNumber; // black + known + number
+        const result = new _a(this.$, this.darkMode, size);
         for (let row = 0; row < size; row++) {
             for (let col = 0; col < size; col++) {
-                const fieldStart = pos + (row * size + col) * bitsPerField
-                const isBlack = binary[fieldStart] === '1'
-                const isKnown = binary[fieldStart + 1] === '1'
-
-                const numberBits = binary.substring(
-                    fieldStart + 2,
-                    fieldStart + 2 + bitsPerNumber
-                )
-                const value = parseInt(numberBits, 2) + 1
-
+                const fieldStart = pos + (row * size + col) * bitsPerField;
+                const isBlack = binary[fieldStart] === '1';
+                const isKnown = binary[fieldStart + 1] === '1';
+                const numberBits = binary.substring(fieldStart + 2, fieldStart + 2 + bitsPerNumber);
+                const value = parseInt(numberBits, 2) + 1;
                 const mode = isBlack
-                    ? (isKnown ? modes.BLACKKNOWN : modes.BLACK)
-                    : (isKnown ? modes.WHITEKNOWN : modes.USER)
-
-                result.#setValues(row, col, mode, value)
+                    ? isKnown
+                        ? modes.BLACKKNOWN
+                        : modes.BLACK
+                    : isKnown
+                        ? modes.WHITEKNOWN
+                        : modes.USER;
+                result.#setValues(row, col, mode, value);
             }
         }
-
-        return result
+        return result;
     }
-
     #parseGameV002(binary) {
-        const result = new Game(this.$, this.darkMode, 9)
-        if (binary.length < (6 * 81) || binary.length > (6 * 81 + 8)) return // Invalid data
+        const result = new _a(this.$, this.darkMode, 9);
+        if (binary.length < 6 * 81 || binary.length > 6 * 81 + 8) {
+            return; // Invalid data
+        }
         for (let i = 0; i < 81; i++) {
-            const subBinary = binary.substring(i * 6, (i + 1) * 6)
-            const mode = parseInt(subBinary.substring(0, 2), 2)
-            const value = parseInt(subBinary.substring(2, 6), 2) + 1
-            result.#setValues(Math.floor(i / 9), i % 9, mode, value)
+            const subBinary = binary.substring(i * 6, (i + 1) * 6);
+            const mode = parseInt(subBinary.substring(0, 2), 2);
+            const value = parseInt(subBinary.substring(2, 6), 2) + 1;
+            result.#setValues(Math.floor(i / 9), i % 9, mode, value);
         }
-
-        return result
+        return result;
     }
-
-    #decode(code) {
-        const base64urlCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
-        let binary = ''
-        for (let i = 0; i < code.length; i++) {
-            let b = base64urlCharacters.indexOf(code.charAt(i)).toString(2)
-            while (b.length < 6) b = '0' + b
-            binary += b
-        }
-        const encodingVersion = parseInt(binary.substring(0, 8), 2)
-        binary = binary.substring(8)
-
-        return { encodingVersion, binary }
-    }
-
     parseGame(code) {
-        const decoded = this.#decode(code)
+        const decoded = base64GameCodeToBinary(code);
         switch (decoded.encodingVersion) {
             case 1:
                 // not supported any more
-                return null
+                return null;
             case 128:
                 // 0b10000000: arbitrary size game encoding
-                return this.#parseGameV128(decoded.binary)
+                return this.#parseGameV128(decoded.binary);
             default:
                 return this.#parseGameV002(decoded.binary);
         }
     }
-
     toJsonArray() {
-        return this.data.map(row =>
-            row.map(field => field.toJsonArray())
-        );
+        return this.data.map((row) => row.map((field) => field.toJsonArray()));
     }
+}
+_a = Game;
+function base64GameCodeToBinary(gameCode) {
+    const base64urlCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let binary = '';
+    for (let i = 0; i < gameCode.length; i++) {
+        let b = base64urlCharacters.indexOf(gameCode.charAt(i)).toString(2);
+        while (b.length < 6)
+            b = '0' + b;
+        binary += b;
+    }
+    const encodingVersion = parseInt(binary.substring(0, 8), 2);
+    binary = binary.substring(8);
+    return { encodingVersion, binary };
+}
+function toFieldUserData(notes) {
+    let user = undefined;
+    // Single note is solved field.
+    if (notes.size == 1) {
+        for (let v of notes) {
+            user = v;
+        }
+    }
+    const userData = { user, notes };
+    return userData;
 }

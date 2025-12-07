@@ -1,18 +1,21 @@
+"use strict";
 // SPDX-FileCopyrightText: 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-
-const CACHE_NAME = 'v0.6.19';
+const CACHE_NAME = 'v0.7.1';
 const urlsToCache = [
     './',
+    './encoder.js',
     './favicon.ico',
     './game.js',
     './gameHistory.js',
-    './generate-str8ts.js',
-    './generate-worker.js',
+    './str8ts-api.js',
+    './str8ts-api-worker.js',
     './index.html',
     './jquery-3.7.1.min.js',
     './LICENSE',
+    './numberInput.js',
+    './popup.js',
     './str8ts.css',
     './str8ts.js',
     './Straights.Web.js',
@@ -31,85 +34,61 @@ const urlsToCache = [
     './site.webmanifest',
     'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600&display=swap',
     'https://fonts.gstatic.com/s/nunito/v31/XRXV3I6Li01BKofINeaB.woff2',
-    'https://fonts.gstatic.com/s/nunito/v31/XRXV3I6Li01BKofINeaBTMnFcQ.woff2'
+    'https://fonts.gstatic.com/s/nunito/v31/XRXV3I6Li01BKofINeaBTMnFcQ.woff2',
 ];
-
-const apiEndPoints = new Set([
-    '/generate',
-    '/hint'
-])
-
+const apiEndPoints = new Set(['/generate', '/hint']);
 async function fetchFresh(url) {
-    console.debug("Fetching ", url)
-    result = await fetch(url, { cache: 'no-store' })
-    console.debug("Response:", result.status, result.statusText)
-    return result
+    console.debug('Fetching ', url);
+    let result = await fetch(url, { cache: 'no-store' });
+    console.debug('Response:', result.status, result.statusText);
+    return result;
 }
-
 async function _fetch(request) {
     const requestUrl = new URL(request.url);
-
     if (apiEndPoints.has(requestUrl.pathname)) {
         // Always fetch from network for local API endpoints
         return await fetch(request);
     }
-
     // Try to match the request in the cache
-    const cachedResponse = await caches.match(
-        request,
-        { ignoreSearch: true })
+    const cachedResponse = await caches.match(request, { ignoreSearch: true });
     if (cachedResponse) {
         // Return cached response if found
-        return cachedResponse
+        return cachedResponse;
     }
-
     // HTTP(S) requests: fetch and cache
-    console.debug("Not found in cache, fetching from network: ", request.url);
+    console.debug('Not found in cache, fetching from network: ', request.url);
     if (request.url.startsWith('http://') || request.url.startsWith('https://')) {
-        const networkResponse = await fetch(request)
-        const cache = await caches.open(CACHE_NAME)
-        await cache.put(request, networkResponse.clone())
-        return networkResponse
+        const networkResponse = await fetch(request);
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(request, networkResponse.clone());
+        return networkResponse;
     }
-
     // Non-HTTP(S) requests: just fetch
-    return await fetch(request)
+    return await fetch(request);
 }
-
-self.addEventListener('install', event => {
-    console.info("Installing service worker", CACHE_NAME)
+self.addEventListener('install', (event) => {
+    console.info('Installing service worker', CACHE_NAME);
     self.skipWaiting();
-    event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
-            return Promise.all(
-                urlsToCache.map(url =>
-                    fetchFresh(url)
-                        .then(response => cache.put(url, response))
-                        .catch(error => console.warn(`Failed to fetch ${url}:`, error))
-                )
-            );
-        })
-    );
+    event.waitUntil(caches.open(CACHE_NAME).then((cache) => {
+        return Promise.all(urlsToCache.map((url) => fetchFresh(url)
+            .then((response) => cache.put(url, response))
+            .catch((error) => console.warn(`Failed to fetch ${url}:`, error))));
+    }));
 });
-
-self.addEventListener('fetch', event => event.respondWith(_fetch(event.request)));
-
-self.addEventListener('activate', event => {
-    const cacheWhitelist = [CACHE_NAME]
-    console.info("Activating service worker", CACHE_NAME)
-
+self.addEventListener('fetch', (event) => event.respondWith(_fetch(event.request)));
+self.addEventListener('activate', (event) => {
+    const cacheWhitelist = [CACHE_NAME];
+    console.info('Activating service worker', CACHE_NAME);
     event.waitUntil((async () => {
         const cacheNames = await caches.keys();
-        await Promise.all(
-            cacheNames.map(cacheName => {
-                if (!cacheWhitelist.includes(cacheName)) {
-                    console.info("Deleting old cache", cacheName)
-                    return caches.delete(cacheName)
-                }
-            })
-        )
-        await self.clients.claim()
-        const clients = await self.clients.matchAll()
-        clients.forEach(client => client.postMessage('reload'))
-    })())
-})
+        await Promise.all(cacheNames.map(async (cacheName) => {
+            if (!cacheWhitelist.includes(cacheName)) {
+                console.info('Deleting old cache', cacheName);
+                await caches.delete(cacheName);
+            }
+        }));
+        await self.clients.claim();
+        const clients = await self.clients.matchAll();
+        clients.forEach((client) => client.postMessage('reload'));
+    })());
+});
