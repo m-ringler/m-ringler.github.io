@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-const CACHE_NAME = 'v0.7.1';
+const CACHE_NAME = 'v0.7.3';
 const urlsToCache = [
     './',
     './encoder.js',

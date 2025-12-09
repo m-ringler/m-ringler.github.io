@@ -1,107 +1,144 @@
 // SPDX-FileCopyrightText: 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-const MAX_NUMBER_OF_STORED_GAMES = 50;
-export function saveGameState(key, game) {
-    migrate();
-    const gameState = {
-        timestamp: Date.now(),
-        data: game.dumpState(),
-    };
-    const gameStateString = JSON.stringify(gameState);
-    localStorage.setItem('history.' + key, gameStateString);
-    // Ensure only the latest MAX_NUMBER_OF_STORED_GAMES are kept
-    const prefixedKeys = getPrefixedHistoryKeys();
-    if (prefixedKeys.length > MAX_NUMBER_OF_STORED_GAMES) {
-        console.info('Cropping game history');
-        const keysByAge = [];
-        for (const pk of prefixedKeys) {
-            const gameState = loadGameStateData(pk);
-            if (!gameState) {
-                console.debug(`Removing corrupt history entry ${pk}`);
-                localStorage.removeItem(pk);
+export class GameHistory {
+    maxNumberOfStoredGames;
+    storagePrefix;
+    versionKey;
+    generatePrefix;
+    storage;
+    constructor(storage, maxNumberOfStoredGames = 50, storagePrefix = 'history.', versionKey = 'version', generatePrefix = 'generate.') {
+        if (!storagePrefix) {
+            throw new Error('storagePrefix must not be empty');
+        }
+        if (!versionKey) {
+            throw new Error('versionKey must not be empty');
+        }
+        if (!generatePrefix) {
+            throw new Error('generatePrefix must not be empty');
+        }
+        this.storage = storage;
+        this.maxNumberOfStoredGames = maxNumberOfStoredGames;
+        this.storagePrefix = storagePrefix;
+        this.versionKey = versionKey;
+        this.generatePrefix = generatePrefix;
+    }
+    saveGameState(key, game) {
+        this.migrate();
+        const gameState = {
+            timestamp: Date.now(),
+            data: game.dumpState(),
+        };
+        const gameStateString = JSON.stringify(gameState);
+        this.storage.setItem(this.storagePrefix + key, gameStateString);
+        this.ensureStorageLimit();
+    }
+    restoreGameState(key, game) {
+        this.migrate();
+        const savedGameState = this.loadGameStateData(this.storagePrefix + key);
+        if (savedGameState) {
+            game.restoreState(savedGameState.data);
+        }
+    }
+    getLatestGameKey() {
+        this.migrate();
+        const prefixedKeys = this.getPrefixedHistoryKeys();
+        let latestKey = null;
+        let latestTimestamp = 0;
+        prefixedKeys.forEach((prefixedKey) => {
+            const gameState = this.loadGameStateData(prefixedKey);
+            if (gameState && gameState.timestamp > latestTimestamp) {
+                latestTimestamp = gameState.timestamp;
+                latestKey = prefixedKey.substring(this.storagePrefix.length);
             }
-            else {
-                keysByAge.push({ key: pk, timestamp: gameState.timestamp });
+        });
+        return latestKey;
+    }
+    getPrefixedHistoryKeys() {
+        return this.getKeys((key) => key.startsWith(this.storagePrefix));
+    }
+    getKeys(include) {
+        const keys = [];
+        for (let i = 0; i < this.storage.length; i++) {
+            const key = this.storage.key(i);
+            if (key && include(key)) {
+                keys.push(key);
             }
         }
-        keysByAge.sort((a, b) => a.timestamp - b.timestamp);
-        for (let i = 0; i < keysByAge.length - MAX_NUMBER_OF_STORED_GAMES; i++) {
-            const oldKey = keysByAge[i].key;
-            console.debug(`Removing old history entry ${oldKey}`);
-            localStorage.removeItem(oldKey);
-        }
+        return keys;
     }
-}
-export function restoreGameState(key, game) {
-    migrate();
-    const savedGameState = loadGameStateData('history.' + key);
-    if (savedGameState) {
-        game.restoreState(savedGameState.data);
-    }
-}
-export function getLatestGameKey() {
-    migrate();
-    const prefixedKeys = getPrefixedHistoryKeys();
-    let latestKey = null;
-    let latestTimestamp = 0;
-    prefixedKeys.forEach((prefixedKey) => {
-        const gameState = loadGameStateData(prefixedKey);
-        if (gameState && gameState.timestamp > latestTimestamp) {
-            latestTimestamp = gameState.timestamp;
-            latestKey = prefixedKey.substring('history.'.length);
-        }
-    });
-    return latestKey;
-}
-function getPrefixedHistoryKeys() {
-    return Object.keys(localStorage).filter((k) => k.startsWith('history.'));
-}
-function loadGameStateData(prefixedKey) {
-    if (!prefixedKey.startsWith('history.')) {
-        return null;
-    }
-    return loadGameStateDataCore(prefixedKey);
-}
-function loadGameStateDataCore(prefixedKey) {
-    try {
-        const gameStateString = localStorage.getItem(prefixedKey);
-        if (!gameStateString) {
+    loadGameStateData(prefixedKey) {
+        if (!prefixedKey.startsWith(this.storagePrefix)) {
             return null;
         }
-        const result = JSON.parse(gameStateString);
-        return result.timestamp && result.data ? result : null;
+        return this.loadGameStateDataCore(prefixedKey);
     }
-    catch (e) {
-        console.warn('Error loading game state from localStorage for key:', prefixedKey, e);
-        return null;
+    loadGameStateDataCore(prefixedKey) {
+        try {
+            const gameStateString = this.storage.getItem(prefixedKey);
+            if (!gameStateString) {
+                return null;
+            }
+            const result = JSON.parse(gameStateString);
+            return result.timestamp && result.data ? result : null;
+        }
+        catch (e) {
+            console.warn('Error loading game state from storage for key:', prefixedKey, e);
+            return null;
+        }
     }
-}
-function migrate() {
-    if (localStorage.getItem('version')) {
-        return;
-    }
-    const keys = Object.keys(localStorage);
-    for (const key of keys) {
-        if (key.startsWith('history.')) {
-            continue;
-        }
-        if (key.startsWith('generate.')) {
-            continue;
-        }
-        const item = loadGameStateDataCore(key);
-        if (!item) {
-            console.debug(`Removing unknown local storage key ${key}`);
-        }
-        else {
-            console.debug(`Migrating game history entry ${key}`);
-            const gameStateString = localStorage.getItem(key);
-            if (gameStateString) {
-                localStorage.setItem('history.' + key, gameStateString);
+    ensureStorageLimit() {
+        const prefixedKeys = this.getPrefixedHistoryKeys();
+        if (prefixedKeys.length > this.maxNumberOfStoredGames) {
+            console.info('Cropping game history');
+            const keysByAge = [];
+            for (const pk of prefixedKeys) {
+                const gameState = this.loadGameStateData(pk);
+                if (!gameState) {
+                    console.debug(`Removing corrupt history entry ${pk}`);
+                    this.storage.removeItem(pk);
+                }
+                else {
+                    keysByAge.push({ key: pk, timestamp: gameState.timestamp });
+                }
+            }
+            keysByAge.sort((a, b) => a.timestamp - b.timestamp);
+            for (let i = 0; i < keysByAge.length - this.maxNumberOfStoredGames; i++) {
+                const oldKey = keysByAge[i].key;
+                console.debug(`Removing old history entry ${oldKey}`);
+                this.storage.removeItem(oldKey);
             }
         }
-        localStorage.removeItem(key);
     }
-    localStorage.setItem('version', '1');
-    console.info('Migrated game history data');
+    migrate() {
+        if (this.storage.getItem(this.versionKey)) {
+            return;
+        }
+        const keysToMigrate = this.getKeys((key) => !key.startsWith(this.storagePrefix) &&
+            !key.startsWith(this.generatePrefix));
+        for (const key of keysToMigrate) {
+            const item = this.storage.getItem(key);
+            if (!item) {
+                console.debug(`Removing unknown storage key ${key}`);
+            }
+            else {
+                try {
+                    const parsed = JSON.parse(item);
+                    if (parsed.timestamp && parsed.data) {
+                        console.debug(`Migrating game history entry ${key}`);
+                        this.storage.setItem(this.storagePrefix + key, item);
+                    }
+                    else {
+                        console.debug(`Removing unknown storage key ${key}`);
+                    }
+                }
+                catch (e) {
+                    console.debug(`Removing unknown storage key ${key}`);
+                }
+            }
+            this.storage.removeItem(key);
+        }
+        this.storage.setItem(this.versionKey, '1');
+        console.info('Migrated game history data');
+    }
 }

@@ -1,35 +1,27 @@
 // SPDX-FileCopyrightText: 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-export function positionPopup(target, popup, windowLayout) {
-    const targetPos = target.getBoundingClientRect();
-    const windowHeight = windowLayout.height;
-    const windowWidth = windowLayout.width;
-    if (!windowHeight || !windowWidth) {
-        return;
-    }
+export function getPopupPosition(popup, targetClientRect, bodyClientRect) {
+    const targetRectAbsolute = {
+        top: targetClientRect.top - bodyClientRect.top,
+        bottom: targetClientRect.bottom - bodyClientRect.top,
+        left: targetClientRect.left - bodyClientRect.left,
+        right: targetClientRect.right - bodyClientRect.left,
+    };
     // Determine the vertical position
-    let popupTop;
-    if (targetPos.top + targetPos.height / 2 > windowHeight / 2) {
-        popupTop =
-            targetPos.top + windowLayout.scrollY - (popup.outerHeight() ?? 0);
-    }
-    else {
-        popupTop = targetPos.top + windowLayout.scrollY + targetPos.height;
-    }
+    const targetIsBelowCenter = targetRectAbsolute.top + targetRectAbsolute.bottom > bodyClientRect.height;
+    const popupTop = targetIsBelowCenter
+        ? targetRectAbsolute.top - (popup.outerHeight() ?? 0)
+        : targetRectAbsolute.bottom;
     // Determine the horizontal position
-    let popupLeft;
-    if (targetPos.left + targetPos.width / 2 > windowWidth / 2) {
-        popupLeft =
-            targetPos.left + windowLayout.scrollX - (popup.outerWidth() ?? 0);
-    }
-    else {
-        popupLeft = targetPos.left + windowLayout.scrollX + targetPos.width;
-    }
-    // Set the position of the dialog
-    popup.css({
-        position: 'absolute',
+    const targetIsRightOfCenter = targetRectAbsolute.left + targetRectAbsolute.right > bodyClientRect.width;
+    const popupLeft = targetIsRightOfCenter
+        ? targetRectAbsolute.left - (popup.outerWidth() ?? 0)
+        : targetRectAbsolute.right;
+    // Return the position of the popup in absolute coordinates
+    return {
         top: popupTop,
         left: popupLeft,
-    });
+        position: 'absolute',
+    };
 }
