@@ -9,6 +9,23 @@ import * as Popup from './popup.js';
 import { UndoStack } from './undoStack.js';
 import { NumberInput } from './numberInput.js';
 import { GameHistory } from './gameHistory.js';
+const GridLayoutOptions = [
+    { id: 'PointSymmetric', caption: 'Point Symmetric', apiValue: 7 },
+    { id: 'DiagonallySymmetric', caption: 'Diagonally Symmetric', apiValue: 3 },
+    {
+        id: 'HorizontallySymmetric',
+        caption: 'Horizontally Symmetric',
+        apiValue: 4,
+    },
+    { id: 'VerticallySymmetric', caption: 'Vertically Symmetric', apiValue: 5 },
+    {
+        id: 'HorizontallyAndVerticallySymmetric',
+        caption: 'Horiz. & Vert. Symmetric',
+        apiValue: 6,
+    },
+    { id: 'Random', caption: 'Random', apiValue: 0 },
+    { id: 'Uniform', caption: 'Uniform', apiValue: 1 },
+];
 const dialogs = {
     NEW_GAME: 1,
     GENERATING_NEW_GAME: 3,
@@ -33,6 +50,7 @@ export class UIController {
     generateDifficulty = DEFAULT_DIFFICULTY;
     currentGridSize = 12;
     generateGridSize = DEFAULT_GRID_SIZE;
+    generateLayout = 'PointSymmetric';
     undoStack;
     hintField = null;
     buttonColors;
@@ -41,6 +59,7 @@ export class UIController {
     // injected dependencies
     $;
     win;
+    setSelectedLayoutOption;
     constructor($, win) {
         this.$ = $;
         this.win = win;
@@ -228,13 +247,15 @@ export class UIController {
         clearInterval(this.timer);
         this.$('#confirm-new-game-button').prop('disabled', true);
         try {
-            const data = await api.generate(this.generateGridSize, this.generateDifficulty);
+            let layoutOption = GridLayoutOptions.find((o) => o.id === this.generateLayout);
+            if (layoutOption === undefined) {
+                console.error('Invalid layout option selected:', this.generateLayout);
+                layoutOption = GridLayoutOptions[0];
+            }
+            const data = await api.generate(this.generateGridSize, this.generateDifficulty, layoutOption.apiValue);
             if (data.status === 0 && data.message.length > Str8ts.minCodeSize) {
-                console.log('Game:', data.message);
-                this.gameUrl =
-                    this.win.location.href.split('?')[0] + '?code=' + data.message;
-                this.gameCode = data.message;
-                await this._startNewGameAsync();
+                const code = data.message;
+                await this.startGameCodeAsync(code);
                 return;
             }
             else {
@@ -247,10 +268,17 @@ export class UIController {
         await this.showDialogAsync(false);
         this.$('#confirm-new-game-button').prop('disabled', false);
     }
+    async startGameCodeAsync(code) {
+        console.log('Game:', code);
+        this.gameUrl = this.win.location.href.split('?')[0] + '?code=' + code;
+        this.gameCode = code;
+        await this.startGameAsync(true);
+    }
     loadSettings() {
         var values = loadNewGameSettings(this.$, (key) => localStorage.getItem(key));
         this.generateGridSize = values.generateGridSize;
         this.generateDifficulty = values.generateDifficulty;
+        this.generateLayout = values.generateLayout;
     }
     changeDifficulty() {
         this.generateDifficulty = Number(this.$('#difficulty-slider').val());
@@ -262,7 +290,11 @@ export class UIController {
         this.$('#grid-size-text').text(this.generateGridSize);
         localStorage.setItem('generate.gridSize', String(this.generateGridSize));
     }
-    async startGameAsync() {
+    changeLayoutOption(selectedOption) {
+        this.generateLayout = selectedOption ? selectedOption : 'PointSymmetric';
+        localStorage.setItem('generate.layout', this.generateLayout);
+    }
+    async startGameAsync(shouldSetLocationHref) {
         let hasGame = false;
         if (this.gameCode && this.gameCode.length > Str8ts.minCodeSize) {
             this.undoStack.clear();
@@ -276,6 +308,10 @@ export class UIController {
                 this._restoreGameState();
                 this.restartTimer();
                 this.renderCounters();
+                if (shouldSetLocationHref && this.gameUrl != this.win.location.href) {
+                    this.SetLocationHref(new URL(this.gameUrl));
+                    this.saveState();
+                }
             }
         }
         if (!hasGame) {
@@ -325,6 +361,9 @@ export class UIController {
                     break;
                 case dialogs.NEW_GAME:
                     this.$('#new-game-dialog').show();
+                    // Force a re-render of the carousel to fix display issues
+                    this.$('.carousel').slick('setPosition');
+                    this.setSelectedLayoutOption(this.generateLayout);
                     break;
                 case dialogs.SOLUTION:
                     if (!this.game.isSolved) {
@@ -356,9 +395,8 @@ export class UIController {
             this.$('.dialog-outer-container').hide();
         }
     }
-    async _startNewGameAsync() {
-        this.win.history.pushState({}, '', this.gameUrl);
-        await this.startGameAsync();
+    SetLocationHref(url) {
+        this.win.history.pushState({}, '', url);
     }
     onKeyDown(e) {
         if (this.game.isSolved)
@@ -478,29 +516,22 @@ export class UIController {
             console.error('Failed to copy:', err);
         }
     }
-    async _handleGameLoadAsync(popstate = false) {
+    async _handleGameLoadAsync() {
         const code = this.getURLParameter('code');
         const currentKey = this.win.location.href;
         if (code && code.length > Str8ts.minCodeSize) {
             this.gameUrl = currentKey;
             this.gameCode = code;
-            if (popstate) {
-                await this.startGameAsync();
-            }
-            else {
-                await this._startNewGameAsync();
-            }
+            await this.startGameAsync(false);
         }
         else {
-            const latestKey = this.gameHistory.getLatestGameKey();
+            let latestKey = this.gameHistory.getLatestGameKey();
             if (latestKey) {
-                // Reload the current page with the latest game code
-                this.win.location.href =
-                    this.win.location.href.split('?')[0] + '?code=' + latestKey;
-                return;
+                await this.startGameCodeAsync(latestKey);
             }
-            // Nothing stored, show new game dialog.
-            await this.showDialogAsync(dialogs.NEW_GAME);
+            else {
+                await this.generateNewGameAsync();
+            }
         }
     }
     async _onResizeAsync() {
@@ -539,6 +570,7 @@ export class UIController {
         // initial UI setup
         this.createGrid();
         await this._onResizeAsync();
+        this.renderLayoutCarousel();
         this.loadSettings();
         await this._handleGameLoadAsync();
         // event handlers for UI elements
@@ -559,7 +591,7 @@ export class UIController {
         });
         // wire page-level events here so they can call private methods
         this.win.addEventListener('popstate', async () => {
-            await this._handleGameLoadAsync(true);
+            await this._handleGameLoadAsync();
         });
         this.$(document).on('keydown', (e) => {
             this.onKeyDown(e);
@@ -603,6 +635,36 @@ export class UIController {
         const col = Number(selection.attr('data-col'));
         return { row, col };
     }
+    renderLayoutCarousel() {
+        const $carousel = this.$('.carousel');
+        $carousel.empty(); // Clear any existing content
+        GridLayoutOptions.forEach((option) => {
+            $carousel.append(`
+      <div class="carousel-slide" data-id="${option.id}">
+        <img src="layout-img/g_${option.id}.png" alt="${option.caption}" loading="lazy">
+        <div class="caption">${option.caption}</div>
+      </div>
+    `);
+        });
+        $carousel.slick({
+            dots: true,
+            infinite: false,
+            speed: 300,
+            slidesToShow: 1,
+            slidesToScroll: 1,
+            arrows: true,
+        });
+        $carousel.on('afterChange', (event, slick, currentSlide) => {
+            const currentOption = GridLayoutOptions[currentSlide];
+            this.changeLayoutOption(currentOption.id);
+        });
+        this.setSelectedLayoutOption = (selectedOption) => {
+            const index = GridLayoutOptions.findIndex((option) => option.id === selectedOption);
+            if (index !== -1) {
+                $carousel.slick('slickGoTo', index);
+            }
+        };
+    }
 }
 function getButtonColors(darkMode) {
     const buttonColorsLight = {
@@ -633,9 +695,11 @@ function loadNewGameSettings($$, getStoredValue) {
         return validatedValue;
     }
     try {
+        const layout = getStoredValue('generate.layout') || 'PointSymmetric';
         return {
             generateGridSize: loadSetting('grid-size-slider', 'generate.gridSize', DEFAULT_GRID_SIZE),
             generateDifficulty: loadSetting('difficulty-slider', 'generate.difficulty', DEFAULT_DIFFICULTY),
+            generateLayout: layout,
         };
     }
     catch (error) {
@@ -643,6 +707,7 @@ function loadNewGameSettings($$, getStoredValue) {
         return {
             generateGridSize: DEFAULT_GRID_SIZE,
             generateDifficulty: DEFAULT_DIFFICULTY,
+            generateLayout: 'PointSymmetric',
         };
     }
 }

@@ -39,7 +39,7 @@ var createWasmModule = (() => {
     return;
   }
 
-  var currentSafariVersion = userAgent.includes("Safari/") && userAgent.match(/Version\/(\d+\.?\d*\.?\d*)/) ? humanReadableVersionToPacked(userAgent.match(/Version\/(\d+\.?\d*\.?\d*)/)[1]) : TARGET_NOT_SUPPORTED;
+  var currentSafariVersion = userAgent.includes("Safari/") && !userAgent.includes("Chrome/") && userAgent.match(/Version\/(\d+\.?\d*\.?\d*)/) ? humanReadableVersionToPacked(userAgent.match(/Version\/(\d+\.?\d*\.?\d*)/)[1]) : TARGET_NOT_SUPPORTED;
   if (currentSafariVersion < 150000) {
     throw new Error(`This emscripten-generated code requires Safari v${ packedVersionToHumanReadable(150000) } (detected v${currentSafariVersion})`);
   }
@@ -1765,7 +1765,7 @@ function assignWasmExports(wasmExports) {
   _Memory_Allocate = Module['_Memory_Allocate'] = createExportWrapper('Memory_Allocate', 1);
   _Memory_Free = Module['_Memory_Free'] = createExportWrapper('Memory_Free', 1);
   _Generator_Hint = Module['_Generator_Hint'] = createExportWrapper('Generator_Hint', 3);
-  _Generator_Generate = Module['_Generator_Generate'] = createExportWrapper('Generator_Generate', 4);
+  _Generator_Generate = Module['_Generator_Generate'] = createExportWrapper('Generator_Generate', 5);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
   _strerror = createExportWrapper('strerror', 1);

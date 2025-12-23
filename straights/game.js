@@ -3,6 +3,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 var _a;
 import { BitmaskEncoder } from './encoder.js';
+const chistmasEmojis = [
+    '🔔',
+    '🎁',
+    '🕯️',
+    '🎅',
+    '👼',
+    '🎶',
+    '❄️',
+    '☃️',
+    '⛄',
+    '🌟',
+    '🎄',
+    '🍷',
+    '🦌',
+    '🌨️',
+    '🎆',
+    '🎇',
+    '🧦',
+    '🎀',
+    '🧸',
+    '🍀',
+];
 const modes = {
     USER: 0,
     WHITEKNOWN: 1,
@@ -273,6 +295,9 @@ export class Field {
         }
         else if (this.mode === modes.WHITEKNOWN) {
             element.text(this.value);
+        }
+        else if (this.mode === modes.BLACK) {
+            fillBlackField(element);
         }
     }
     toJsonArray() {
@@ -549,6 +574,10 @@ export class Game {
                 const isKnown = binary[fieldStart + 1] === '1';
                 const numberBits = binary.substring(fieldStart + 2, fieldStart + 2 + bitsPerNumber);
                 const value = parseInt(numberBits, 2) + 1;
+                if (isNaN(value)) {
+                    console.warn(`Cannot parse game: invalid value ${value} at (${row}, ${col}).`);
+                    return null; // Invalid data
+                }
                 const mode = isBlack
                     ? isKnown
                         ? modes.BLACKKNOWN
@@ -576,22 +605,43 @@ export class Game {
     }
     parseGame(code) {
         const decoded = base64GameCodeToBinary(code);
+        let result = null;
         switch (decoded.encodingVersion) {
             case 1:
                 // not supported any more
-                return null;
+                break;
             case 128:
                 // 0b10000000: arbitrary size game encoding
-                return this.#parseGameV128(decoded.binary);
+                result = this.#parseGameV128(decoded.binary);
+                break;
+            case 2:
+                result = this.#parseGameV002(decoded.binary);
+                break;
             default:
-                return this.#parseGameV002(decoded.binary);
+                // Unknown encoding version
+                break;
         }
+        if (!result) {
+            console.warn('Failed to parse game from code: ', code);
+        }
+        return result;
     }
     toJsonArray() {
         return this.data.map((row) => row.map((field) => field.toJsonArray()));
     }
 }
 _a = Game;
+function setEmoji(element, emojis) {
+    let emoji = element.data('festive-emoji');
+    if (!emoji) {
+        emoji = randomItem(emojis);
+        element.data('festive-emoji', emoji);
+    }
+    element.text(emoji);
+}
+function randomItem(emojis) {
+    return emojis[Math.floor(Math.random() * emojis.length)];
+}
 function base64GameCodeToBinary(gameCode) {
     const base64urlCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
     let binary = '';
@@ -615,4 +665,15 @@ function toFieldUserData(notes) {
     }
     const userData = { user, notes };
     return userData;
+}
+function fillBlackField(element) {
+    const now = new Date();
+    if (isChristmasTime(now)) {
+        setEmoji(element, chistmasEmojis);
+    }
+}
+function isChristmasTime(now) {
+    const month = now.getMonth(); // 0 = Jan, 11 = Dec
+    const day = now.getDate();
+    return (month === 11 && day >= 20) || (month === 0 && day <= 6);
 }

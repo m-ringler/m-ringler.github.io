@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 const worker = new Worker('str8ts-api-worker.js');
-export function generate(size, difficulty) {
+export function generate(size, difficulty, gridLayout) {
     return run_in_worker({
         method: 'generate',
         size,
         difficulty,
+        gridLayout,
     });
 }
 export function generateHint(gameAsJson) {
