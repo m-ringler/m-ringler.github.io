@@ -33,11 +33,16 @@ export class GameHistory {
         this.storage.setItem(this.storagePrefix + key, gameStateString);
         this.ensureStorageLimit();
     }
-    restoreGameState(key, game) {
+    async restoreGameStateAsync(key, game) {
         this.migrate();
         const savedGameState = this.loadGameStateData(this.storagePrefix + key);
         if (savedGameState) {
-            game.restoreState(savedGameState.data);
+            await game.restoreStateAsync(savedGameState.data);
+            // We use the last modification timme, if we do not have stored
+            // information about the time the game was created
+            if (game.created > savedGameState.timestamp) {
+                game.created = savedGameState.timestamp;
+            }
         }
     }
     getLatestGameKey() {
@@ -53,6 +58,21 @@ export class GameHistory {
             }
         });
         return latestKey;
+    }
+    getAllSavedGames() {
+        this.migrate();
+        const prefixedKeys = this.getPrefixedHistoryKeys();
+        const result = [];
+        prefixedKeys.forEach((prefixedKey) => {
+            const gameState = this.loadGameStateData(prefixedKey);
+            if (gameState) {
+                result.push({
+                    key: prefixedKey.substring(this.storagePrefix.length),
+                    data: gameState,
+                });
+            }
+        });
+        return result;
     }
     getPrefixedHistoryKeys() {
         return this.getKeys((key) => key.startsWith(this.storagePrefix));
@@ -111,6 +131,7 @@ export class GameHistory {
         }
     }
     migrate() {
+        // migrates from old storage format (no prefixes, no version) to new format
         if (this.storage.getItem(this.versionKey)) {
             return;
         }
