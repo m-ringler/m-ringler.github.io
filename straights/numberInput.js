@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 export class NumberInput {
-    handleNumber;
+    handleNumberAsync;
+    digitTimeout;
     currentNumber = 0;
     digitTimer = undefined;
-    digitTimeout;
-    constructor(handleNumber, digitTimeout = 500) {
-        this.handleNumber = handleNumber;
+    constructor(handleNumberAsync, digitTimeout = 500) {
+        this.handleNumberAsync = handleNumberAsync;
         this.digitTimeout = digitTimeout;
     }
-    handleDigit(digit, maxNumber) {
+    async handleDigitAsync(digit, maxNumber) {
         if (digit < 0 || digit > 9) {
             throw new Error('Digit must be between 0 and 9');
         }
@@ -30,19 +30,20 @@ export class NumberInput {
         }
         // If the number exceeds maxNumber, finalize the previous number and restart with the last digit
         if (this.currentNumber > maxNumber) {
-            this.handleNumber(previousNumber);
+            await this.handleNumberAsync(previousNumber);
             this.currentNumber = digit;
         }
         // If appending another digit would exceed maxNumber, finalize currentNumber
         if (this.currentNumber * 10 > maxNumber) {
-            this.handleNumber(this.currentNumber);
+            await this.handleNumberAsync(this.currentNumber);
             this.currentNumber = 0;
             return;
         }
         // Set a new timeout to finalize the number if no more digits arrive
-        this.digitTimer = setTimeout(() => {
-            this.handleNumber(this.currentNumber);
+        this.digitTimer = setTimeout(async () => {
+            const n = this.currentNumber;
             this.currentNumber = 0;
+            await this.handleNumberAsync(n);
         }, this.digitTimeout);
     }
     reset() {

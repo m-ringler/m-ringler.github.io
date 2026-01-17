@@ -1,15 +1,10 @@
 // SPDX-FileCopyrightText: 2020 Luis Walter, 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-var _a;
 import { BitmaskEncoder } from './encoder.js';
 import * as EncoderModule from './encoder.js';
-export const FieldModes = {
-    USER: 0,
-    WHITEKNOWN: 1,
-    BLACK: 2,
-    BLACKKNOWN: 3,
-};
+import * as GameReader from './gameReader.js';
+export const FieldModes = GameReader.FieldModes;
 const MIN_GRID_SIZE_V128 = 4;
 const minCodeSizeV2 = 82;
 const minCodeSizeV128 = (8 /* ENCODINGVERSION */ +
@@ -254,7 +249,7 @@ export class Game {
     getPercentSolved() {
         let numUserFields = 0;
         let solved = 0;
-        this.#getUserFields().forEach((f) => {
+        this.getUserFields().forEach((f) => {
             numUserFields++;
             if (f.isSolved()) {
                 solved += 1;
@@ -310,45 +305,38 @@ export class Game {
             });
         }
     }
-    #getEncoder() {
+    getEncoder() {
         return new BitmaskEncoder({
             compressionThreshold: 48,
             minCompressionRatio: 0.9,
             maxN: 12,
         });
     }
-    #getUserFields() {
+    getUserFields() {
         return Array.from(this.loopFields(), (x) => x.field).filter((x) => x.mode === FieldModes.USER);
     }
     dumpStateBase64() {
-        const encoder = this.#getEncoder();
+        const encoder = this.getEncoder();
         var data = this.getState();
         const encoded = encoder.encodeUncompressed(this.size, data);
         return encoded.base64Data;
     }
     getState() {
-        return this.#getUserFields().map((f) => (f.user ? [f.user] : f.notes));
+        return this.getUserFields().map((f) => (f.user ? [f.user] : f.notes));
     }
     async dumpStateBase64Async() {
-        const encoder = this.#getEncoder();
+        const encoder = this.getEncoder();
         var data = this.getState();
         const encoded = await encoder.encodeAsync(this.size, data);
         return encoded.base64Data;
     }
     async restoreStateBase64Async(base64Data) {
-        const userFields = this.#getUserFields();
+        const userFields = this.getUserFields();
         const count = userFields.length;
-        const decoded = await this.#getEncoder().decodeAsync({ base64Data, count }, this.size);
+        const decoded = await this.getEncoder().decodeAsync({ base64Data, count }, this.size);
         for (let i = 0; i < count; i++) {
             userFields[i].reset(toFieldUserData(decoded[i]));
         }
-    }
-    #setValues(row, col, mode, value) {
-        const field = new Field(row, col, this);
-        this.data[row][col] = field;
-        this.data[row][col].mode = mode;
-        this.data[row][col].value = value;
-        field.render();
     }
     *loopFields() {
         for (let r = 0; r < this.size; r++) {
@@ -358,7 +346,7 @@ export class Game {
             }
         }
     }
-    #forEachField(iteratorFunction) {
+    forEachField(iteratorFunction) {
         for (const { field, row, col } of this.loopFields()) {
             iteratorFunction(field, row, col);
         }
@@ -368,14 +356,14 @@ export class Game {
             return;
         }
         this.isSolved = true;
-        this.#unselectActiveField();
-        this.#forEachField((field) => {
+        this.unselectActiveField();
+        this.forEachField((field) => {
             field.showSolution();
         });
     }
-    #checkWrong(checkNotes = false) {
+    checkWrong(checkNotes = false) {
         let result = false;
-        this.#forEachField((field) => {
+        this.forEachField((field) => {
             field.checkWrong(checkNotes);
             if (field.wrong) {
                 result = true;
@@ -388,7 +376,7 @@ export class Game {
             return;
         }
         let finished = true;
-        this.#forEachField((field) => {
+        this.forEachField((field) => {
             if (!field.user && field.notes.size == 1) {
                 field.user = field.notes.values().next().value;
                 field.notes.clear();
@@ -400,7 +388,7 @@ export class Game {
         });
         this.isSolved = finished;
         if (this.isSolved) {
-            this.#unselectActiveField();
+            this.unselectActiveField();
         }
     }
     checkForHint() {
@@ -413,7 +401,7 @@ export class Game {
             return getResult(true, false);
         }
         this.hint_count++;
-        if (this.#checkWrong(false) || this.#checkWrong(true)) {
+        if (this.checkWrong(false) || this.checkWrong(true)) {
             return getResult(false, true);
         }
         return getResult(false, false);
@@ -424,28 +412,28 @@ export class Game {
             return;
         }
         this.check_count++;
-        this.#checkWrong();
+        this.checkWrong();
     }
     restart() {
         this.isSolved = false;
-        this.#forEachField((field) => field.reset());
+        this.forEachField((field) => field.reset());
     }
     getActiveField() {
         return this.activeFieldIndex
             ? this.get(this.activeFieldIndex.row, this.activeFieldIndex.col)
             : null;
     }
-    #unselectActiveField() {
+    unselectActiveField() {
         const activeField = this.getActiveField();
         if (activeField) {
             this.activeFieldIndex = null;
             activeField.render();
         }
     }
-    selectCell(row, col) {
+    setActiveField(row, col) {
         if (!this.isSolved && this.get(row, col).isEditable()) {
             // Reset previously selected field
-            this.#unselectActiveField();
+            this.unselectActiveField();
             // Change background of just selected field
             this.activeFieldIndex = { row, col };
             this.getActiveField().render();
@@ -456,10 +444,10 @@ export class Game {
             return;
         }
         const { row, col } = this.activeFieldIndex;
-        var newCell = this.#findNextEditableCell(row, col, dy, dx);
-        this.selectCell(newCell.row, newCell.col);
+        var newCell = this.findNextEditableField(row, col, dy, dx);
+        this.setActiveField(newCell.row, newCell.col);
     }
-    #findNextEditableCell(row, col, rowDelta, colDelta) {
+    findNextEditableField(row, col, rowDelta, colDelta) {
         let newRow = row;
         let newCol = col;
         do {
@@ -469,89 +457,12 @@ export class Game {
             (newRow !== row || newCol != col));
         return { row: newRow, col: newCol };
     }
-    // Parse game
-    #parseGameV128(binary) {
-        const size = parseInt(binary.substring(0, 5), 2);
-        const pos = 5;
-        const bitsPerNumber = Math.floor(Math.log2(size - 1)) + 1;
-        const bitsPerField = 2 + bitsPerNumber; // black + known + number
-        const result = new _a(this.renderer, size);
-        for (let row = 0; row < size; row++) {
-            for (let col = 0; col < size; col++) {
-                const fieldStart = pos + (row * size + col) * bitsPerField;
-                const isBlack = binary[fieldStart] === '1';
-                const isKnown = binary[fieldStart + 1] === '1';
-                const numberBits = binary.substring(fieldStart + 2, fieldStart + 2 + bitsPerNumber);
-                const value = parseInt(numberBits, 2) + 1;
-                if (isNaN(value)) {
-                    console.warn(`Cannot parse game: invalid value ${value} at (${row}, ${col}).`);
-                    return null; // Invalid data
-                }
-                const mode = isBlack
-                    ? isKnown
-                        ? FieldModes.BLACKKNOWN
-                        : FieldModes.BLACK
-                    : isKnown
-                        ? FieldModes.WHITEKNOWN
-                        : FieldModes.USER;
-                result.#setValues(row, col, mode, value);
-            }
-        }
-        return result;
-    }
-    #parseGameV002(binary) {
-        const result = new _a(this.renderer, 9);
-        if (binary.length < 6 * 81 || binary.length > 6 * 81 + 8) {
-            return; // Invalid data
-        }
-        for (let i = 0; i < 81; i++) {
-            const subBinary = binary.substring(i * 6, (i + 1) * 6);
-            const mode = parseInt(subBinary.substring(0, 2), 2);
-            const value = parseInt(subBinary.substring(2, 6), 2) + 1;
-            result.#setValues(Math.floor(i / 9), i % 9, mode, value);
-        }
-        return result;
-    }
-    parseGame(code) {
-        const decoded = base64GameCodeToBinary(code);
-        let result = null;
-        switch (decoded.encodingVersion) {
-            case 1:
-                // not supported any more
-                break;
-            case 128:
-                // 0b10000000: arbitrary size game encoding
-                result = this.#parseGameV128(decoded.binary);
-                break;
-            case 2:
-                result = this.#parseGameV002(decoded.binary);
-                break;
-            default:
-                // Unknown encoding version
-                break;
-        }
-        if (!result) {
-            console.warn('Failed to parse game from code: ', code);
-        }
-        return result;
+    parseGameCode(base64urlEncodedGameCode) {
+        return GameReader.createGame(base64urlEncodedGameCode, (n) => new GameBuilder(new Game(this.renderer, n)));
     }
     toJsonArray() {
         return this.data.map((row) => row.map((field) => field.toJsonArray()));
     }
-}
-_a = Game;
-function base64GameCodeToBinary(gameCode) {
-    const base64urlCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-    let binary = '';
-    for (let i = 0; i < gameCode.length; i++) {
-        let b = base64urlCharacters.indexOf(gameCode.charAt(i)).toString(2);
-        while (b.length < 6)
-            b = '0' + b;
-        binary += b;
-    }
-    const encodingVersion = parseInt(binary.substring(0, 8), 2);
-    binary = binary.substring(8);
-    return { encodingVersion, binary };
 }
 function toFieldUserData(notes) {
     let user = undefined;
@@ -563,4 +474,20 @@ function toFieldUserData(notes) {
     }
     const userData = { user, notes };
     return userData;
+}
+class GameBuilder {
+    game;
+    constructor(game) {
+        this.game = game;
+    }
+    setField(row, col, mode, value) {
+        const field = new Field(row, col, this.game);
+        field.mode = mode;
+        field.value = value;
+        this.game.data[row][col] = field;
+        field.render();
+    }
+    getGame() {
+        return this.game;
+    }
 }

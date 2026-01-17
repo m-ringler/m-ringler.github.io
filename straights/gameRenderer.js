@@ -27,6 +27,8 @@ const chistmasEmojis = [
 export class JQueryFieldRenderer {
     $;
     darkMode;
+    emojiSetId = 0;
+    emojiSet = '';
     constructor($, darkMode) {
         this.$ = $;
         this.darkMode = darkMode;
@@ -63,6 +65,27 @@ export class JQueryFieldRenderer {
         BG_HINT: '#ffff99',
     };
     colors;
+    emojis = [];
+    setEmojis(emojis) {
+        if (emojis === null) {
+            this.emojis = [];
+        }
+        else if (typeof emojis === 'string') {
+            const Seg = Intl.Segmenter;
+            if (typeof Seg === 'function') {
+                const seg = new Seg(undefined, { granularity: 'grapheme' });
+                this.emojis = Array.from(seg.segment(emojis), (s) => s.segment);
+            }
+            else {
+                this.emojis = Array.from(emojis);
+            }
+        }
+        else {
+            this.emojis = emojis;
+        }
+        this.emojiSetId = this.emojiSetId % 100;
+        this.emojiSet = this.emojiSetId.toString();
+    }
     renderField(field) {
         const element = this.getElement(field);
         element.empty();
@@ -103,7 +126,7 @@ export class JQueryFieldRenderer {
             element.text(field.value);
         }
         else if (field.mode === Str8ts.FieldModes.BLACK) {
-            fillBlackField(element);
+            this.fillBlackField(element);
         }
     }
     getBackgroundColor(field) {
@@ -160,11 +183,14 @@ export class JQueryFieldRenderer {
     static getSelector(field) {
         return `#ce${field.row}_${field.col}`;
     }
-}
-function fillBlackField(element) {
-    const now = new Date();
-    if (isChristmasTime(now)) {
-        setEmoji(element, chistmasEmojis);
+    fillBlackField(element) {
+        const now = new Date();
+        if (this.emojis?.length > 0) {
+            setEmoji(element, this.emojis, this.emojiSet);
+        }
+        else if (isChristmasTime(now)) {
+            setEmoji(element, chistmasEmojis, 'xmas');
+        }
     }
 }
 function isChristmasTime(now) {
@@ -172,13 +198,15 @@ function isChristmasTime(now) {
     const day = now.getDate();
     return (month === 11 && day >= 20) || (month === 0 && day <= 6);
 }
-function setEmoji(element, emojis) {
-    let emoji = element.data('festive-emoji');
-    if (!emoji) {
-        emoji = randomItem(emojis);
-        element.data('festive-emoji', emoji);
-        element.text(emoji);
+function setEmoji(element, emojis, emojiKey) {
+    let currentEmojiKey = element.data('emojis');
+    let currentEmoji = element.data('emoji');
+    if (currentEmojiKey != emojiKey || !currentEmoji) {
+        currentEmoji = randomItem(emojis);
+        element.data('emojis', emojiKey);
+        element.data('emoji', currentEmoji);
     }
+    element.text(currentEmoji);
 }
 function randomItem(emojis) {
     return emojis[Math.floor(Math.random() * emojis.length)];
