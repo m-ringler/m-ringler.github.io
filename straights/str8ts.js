@@ -13,6 +13,7 @@ import { GameHistory } from './gameHistory.js';
 import * as HistoryRendererModule from './historyRenderer.js';
 import * as CheckerboardModule from './checkerboard.js';
 import { decodeGridFromBase64Url } from './encoder.js';
+// Global Constants
 const GridLayoutOptions = [
     { id: 'PointSymmetric', caption: 'Point Symmetric', apiValue: 7 },
     { id: 'DiagonallySymmetric', caption: 'Diagonally Symmetric', apiValue: 3 },
@@ -73,7 +74,7 @@ export class UIController {
         this.undoStack = new UndoStack(this.renderUndoButton.bind(this));
         const darkMode = win.matchMedia('(prefers-color-scheme: dark)').matches;
         this.buttonColors = getButtonColors(darkMode);
-        this.renderer = new Renderer.JQueryFieldRenderer(this.$, darkMode);
+        this.renderer = new Renderer.JQueryFieldRenderer(this.$, darkMode, MAX_GRID_SIZE);
         this.game = new Str8ts.Game(this.renderer);
         this.gameHistory = new GameHistory(localStorage);
         this.numberInput = new NumberInput(async (num) => await this.handleNumberInputAsync(num));
@@ -202,16 +203,16 @@ export class UIController {
             const gameField = this.game.get(field.row, field.col);
             gameField.copyFrom(field);
             gameField.wrong = false;
-            this.setActiveField(field.row, field.col);
+            this.setActiveField(gameField);
         }
     }
-    setActiveField(row, col) {
-        this.game.setActiveField(row, col);
+    setActiveField(idx) {
+        this.game.setActiveField(idx.row, idx.col);
     }
-    toggleNoOrAllNotes(row, col) {
-        this.setActiveField(row, col);
+    toggleNoOrAllNotes(idx) {
+        this.setActiveField(idx);
         this.pushActiveFieldToUndoStack();
-        this.game.get(row, col).toggleNoOrAllNotes();
+        this.game.getField(idx).toggleNoOrAllNotes();
     }
     renderUndoButton(length) {
         const undoButton = this.$('#undo-button');
@@ -240,28 +241,10 @@ export class UIController {
         for (let i = this.currentGridSize + 1; i <= MAX_GRID_SIZE; i++) {
             this.$(`td[data-button="bn${i}"]`).hide();
         }
-        for (let r = 0; r < this.currentGridSize; r++) {
-            this.$('#r' + r).show();
-            for (let c = 0; c < this.currentGridSize; c++) {
-                this.$(`#ce${r}_${c}`).show();
-            }
-            for (let c = this.currentGridSize; c < MAX_GRID_SIZE; c++) {
-                this.$(`#ce${r}_${c}`).hide();
-            }
-        }
-        for (let r = this.currentGridSize; r < MAX_GRID_SIZE; r++) {
-            this.$('#r' + r).hide();
-        }
+        this.renderer.setGridSize(this.currentGridSize);
     }
     createGrid() {
-        for (let r = 0; r < MAX_GRID_SIZE; r++) {
-            let row = `<tr class="row" id="r${r}" data-row="${r}">`;
-            for (let c = 0; c < MAX_GRID_SIZE; c++) {
-                row += `<td class="cell" id="ce${r}_${c}" data-row="${r}" data-col="${c}"></td>`;
-            }
-            row += '</tr>';
-            this.$('.container').append(row);
-        }
+        this.renderer.createGridInContainer(this.$('.container'));
     }
     restartTimer() {
         this.starttime = new Date().getTime();
@@ -468,7 +451,12 @@ export class UIController {
             return;
         let handled = false;
         const key = e.key;
-        if (this.handleCursorKey(e)) {
+        if (key === undefined)
+            return;
+        const which = e.which;
+        if (typeof which !== 'number')
+            return;
+        if (this.handleCursorKey({ which })) {
             handled = true;
         }
         else if (key >= '0' && key <= '9') {
@@ -611,7 +599,7 @@ export class UIController {
             // Large screen
             this.$('#buttons-small').hide();
             this.$('#buttons-large').show();
-            this.$('.cell').css({
+            this.$(`.${this.renderer.cellStyle}`).css({
                 'font-size': '22pt',
                 width: '41px',
                 height: '41px',
@@ -626,7 +614,7 @@ export class UIController {
             this.$('#buttons-large').hide();
             this.$('.container').css({ margin: '5px 2px' });
             this.$('.controls').css({ margin: '0px 2px' });
-            this.$('.cell').css({
+            this.$(`.${this.renderer.cellStyle}`).css({
                 'font-size': '17pt',
                 width: `${cellwidth}px`,
                 height: `${cellwidth}px`,
@@ -644,20 +632,21 @@ export class UIController {
         this.loadSettings();
         await this.handleGameLoadAsync();
         // event handlers for UI elements
-        const gridCells = this.$('td[id^="ce"]');
-        gridCells.on('click', (evt) => {
-            const { row, col } = this.getRowAndColumnOfTargetCell(evt);
-            this.setActiveField(row, col);
+        const gridCells = this.renderer.getAllGridCells();
+        const self = this;
+        gridCells.on('click', function () {
+            const idx = self.getFieldIndex(this);
+            self.setActiveField(idx);
         });
-        gridCells.on('dblclick', (evt) => {
-            const { row, col } = this.getRowAndColumnOfTargetCell(evt);
-            this.toggleNoOrAllNotes(row, col);
+        gridCells.on('dblclick', function () {
+            const idx = self.getFieldIndex(this);
+            self.toggleNoOrAllNotes(idx);
         });
         const numberButtons = this.$('td[data-button^="bn"]');
-        numberButtons.on('click', async (evt) => {
-            const el = evt.currentTarget;
-            const num = Number(this.$(el).text());
-            await this.handleNumberInputAsync(num);
+        numberButtons.on('click', async function () {
+            const el = self.$(this);
+            const num = Number(el.text());
+            await self.handleNumberInputAsync(num);
         });
         // wire page-level events here so they can call private methods
         this.win.addEventListener('popstate', async () => {
@@ -700,11 +689,8 @@ export class UIController {
             .not('#hint-close') // special handler above
             .on('click', async () => await this.showDialogAsync(false));
     }
-    getRowAndColumnOfTargetCell(evt) {
-        const selection = this.$(evt.currentTarget);
-        const row = Number(selection.attr('data-row'));
-        const col = Number(selection.attr('data-col'));
-        return { row, col };
+    getFieldIndex(cell) {
+        return this.renderer.getFieldIndex(cell);
     }
     renderLayoutCarousel() {
         const $carousel = this.$('.carousel');
@@ -725,7 +711,7 @@ export class UIController {
             slidesToScroll: 1,
             arrows: true,
         });
-        $carousel.on('afterChange', (event, slick, currentSlide) => {
+        $carousel.on('afterChange', (_event, _slick, currentSlide) => {
             const currentOption = GridLayoutOptions[currentSlide];
             this.changeLayoutOption(currentOption.id);
         });

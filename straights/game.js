@@ -15,21 +15,20 @@ export const minCodeSize = Math.min(minCodeSizeV2, minCodeSizeV128);
 export class Field {
     row;
     col;
-    game;
-    value;
     mode;
+    value;
+    game;
     wrong;
     hint;
     isShowingSolution;
     user;
     notes;
-    constructor(row, col, game) {
+    constructor(row, col, mode, value, game) {
         this.row = row;
         this.col = col;
+        this.mode = mode;
+        this.value = value;
         this.game = game;
-        // fixed after initialization
-        this.value = undefined;
-        this.mode = undefined;
         // derived, only used when checking
         this.wrong = false;
         this.hint = undefined;
@@ -59,7 +58,7 @@ export class Field {
         }
     }
     isActive() {
-        return (this.game.activeFieldIndex &&
+        return (this.game.activeFieldIndex !== null &&
             this.game.activeFieldIndex.col === this.col &&
             this.game.activeFieldIndex.row === this.row);
     }
@@ -104,7 +103,7 @@ export class Field {
             this.render();
         }
     }
-    #isSolvedCorrectly() {
+    isSolvedCorrectly() {
         if (!this.isEditable()) {
             return 1;
         }
@@ -117,10 +116,10 @@ export class Field {
         return -1;
     }
     isSolved() {
-        return this.#isSolvedCorrectly() === 1;
+        return this.isSolvedCorrectly() === 1;
     }
     checkWrong(checkNotes = false) {
-        const correct = this.#isSolvedCorrectly();
+        const correct = this.isSolvedCorrectly();
         switch (correct) {
             case -1:
                 this.wrong = true;
@@ -140,7 +139,7 @@ export class Field {
     }
     showSolution() {
         this.isShowingSolution = true;
-        this.wrong = this.#isSolvedCorrectly() === -1;
+        this.wrong = this.isSolvedCorrectly() === -1;
         this.render();
     }
     setHint(number) {
@@ -153,9 +152,7 @@ export class Field {
         this.render();
     }
     copy() {
-        const field = new Field(this.row, this.col, this.game);
-        field.value = this.value;
-        field.mode = this.mode;
+        const field = new Field(this.row, this.col, this.mode, this.value, this.game);
         field.wrong = this.wrong;
         field.isShowingSolution = this.isShowingSolution;
         field.copyFrom(this);
@@ -220,12 +217,16 @@ export class Game {
         for (let r = 0; r < size; r++) {
             this.data.push([]);
             for (let c = 0; c < size; c++) {
-                this.data[r].push(new Field(r, c, this));
+                // initialize all fields as black
+                this.data[r].push(new Field(r, c, FieldModes.BLACK, undefined, this));
             }
         }
         this.check_count = 0;
         this.hint_count = 0;
         this.created = Date.now();
+    }
+    getField(idx) {
+        return this.get(idx.row, idx.col);
     }
     get(row, col) {
         return this.data[row][col];
@@ -448,14 +449,39 @@ export class Game {
         this.setActiveField(newCell.row, newCell.col);
     }
     findNextEditableField(row, col, rowDelta, colDelta) {
-        let newRow = row;
-        let newCol = col;
-        do {
-            newRow = (newRow + rowDelta + this.size) % this.size;
-            newCol = (newCol + colDelta + this.size) % this.size;
-        } while (!this.get(newRow, newCol).isEditable() &&
-            (newRow !== row || newCol != col));
-        return { row: newRow, col: newCol };
+        const move = (value, delta) => {
+            return (value + delta + this.size) % this.size;
+        };
+        let newRow = move(row, rowDelta);
+        let newCol = move(col, colDelta);
+        let success = this.get(newRow, newCol).isEditable();
+        if (!success && rowDelta != 0) {
+            // If new field is not editable, try to find the next
+            // editable field in the target column by moving further
+            // in the direction of rowDelta.
+            const one = Math.sign(rowDelta);
+            for (let stepped = 0; stepped < this.size; stepped++) {
+                newRow = move(newRow, one);
+                if (this.get(newRow, newCol).isEditable()) {
+                    success = true;
+                    break;
+                }
+            }
+        }
+        if (!success && colDelta != 0) {
+            // If new field is not editable, try to find the next
+            // editable field in the target row by moving further
+            // in the direction of colDelta.
+            const one = Math.sign(colDelta);
+            for (let stepped = 0; stepped < this.size; stepped++) {
+                newCol = move(newCol, one);
+                if (this.get(newRow, newCol).isEditable()) {
+                    success = true;
+                    break;
+                }
+            }
+        }
+        return success ? { row: newRow, col: newCol } : { row, col };
     }
     parseGameCode(base64urlEncodedGameCode) {
         return GameReader.createGame(base64urlEncodedGameCode, (n) => new GameBuilder(new Game(this.renderer, n)));
@@ -481,9 +507,7 @@ class GameBuilder {
         this.game = game;
     }
     setField(row, col, mode, value) {
-        const field = new Field(row, col, this.game);
-        field.mode = mode;
-        field.value = value;
+        const field = new Field(row, col, mode, value, this.game);
         this.game.data[row][col] = field;
         field.render();
     }

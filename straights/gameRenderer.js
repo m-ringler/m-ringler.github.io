@@ -2,36 +2,19 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 import * as Str8ts from './game.js';
-const chistmasEmojis = [
-    '🔔',
-    '🎁',
-    '🕯️',
-    '🎅',
-    '👼',
-    '🎶',
-    '❄️',
-    '☃️',
-    '⛄',
-    '🌟',
-    '🎄',
-    '🍷',
-    '🦌',
-    '🌨️',
-    '🎆',
-    '🎇',
-    '🧦',
-    '🎀',
-    '🧸',
-    '🍀',
-];
+import * as emojisModule from './seasonalEmojis.js';
 export class JQueryFieldRenderer {
     $;
     darkMode;
+    maxGridSize;
+    cellStyle;
     emojiSetId = 0;
     emojiSet = '';
-    constructor($, darkMode) {
+    constructor($, darkMode, maxGridSize, cellStyle = 'cell') {
         this.$ = $;
         this.darkMode = darkMode;
+        this.maxGridSize = maxGridSize;
+        this.cellStyle = cellStyle;
         this.colors = this.darkMode
             ? JQueryFieldRenderer.gameColorsDark
             : JQueryFieldRenderer.gameColorsLight;
@@ -83,7 +66,7 @@ export class JQueryFieldRenderer {
         else {
             this.emojis = emojis;
         }
-        this.emojiSetId = this.emojiSetId % 100;
+        this.emojiSetId = (this.emojiSetId + 1) % 100;
         this.emojiSet = this.emojiSetId.toString();
     }
     renderField(field) {
@@ -180,23 +163,55 @@ export class JQueryFieldRenderer {
         }
         return result;
     }
+    getAllGridCells() {
+        return this.$('td[id^="ce"]');
+    }
     static getSelector(field) {
         return `#ce${field.row}_${field.col}`;
     }
-    fillBlackField(element) {
-        const now = new Date();
-        if (this.emojis?.length > 0) {
-            setEmoji(element, this.emojis, this.emojiSet);
-        }
-        else if (isChristmasTime(now)) {
-            setEmoji(element, chistmasEmojis, 'xmas');
+    createGridInContainer(container) {
+        for (let r = 0; r < this.maxGridSize; r++) {
+            let row = `<tr class="row" id="r${r}" data-row="${r}">`;
+            for (let c = 0; c < this.maxGridSize; c++) {
+                row += `<td class="${this.cellStyle}" id="ce${r}_${c}" data-row="${r}" data-col="${c}"></td>`;
+            }
+            row += '</tr>';
+            container.append(row);
         }
     }
-}
-function isChristmasTime(now) {
-    const month = now.getMonth(); // 0 = Jan, 11 = Dec
-    const day = now.getDate();
-    return (month === 11 && day >= 20) || (month === 0 && day <= 6);
+    setGridSize(size) {
+        if (size < 1 || size > this.maxGridSize) {
+            throw new Error(`Invalid grid size ${size}, must be between 1 and ${this.maxGridSize}`);
+        }
+        for (let r = 0; r < size; r++) {
+            this.$('#r' + r).show();
+            for (let c = 0; c < size; c++) {
+                this.$(`#ce${r}_${c}`).show();
+            }
+            for (let c = size; c < this.maxGridSize; c++) {
+                this.$(`#ce${r}_${c}`).hide();
+            }
+        }
+        for (let r = size; r < this.maxGridSize; r++) {
+            this.$('#r' + r).hide();
+        }
+    }
+    getFieldIndex(cell) {
+        const selection = this.$(cell);
+        const row = Number(selection.attr('data-row'));
+        const col = Number(selection.attr('data-col'));
+        return { row, col };
+    }
+    fillBlackField(element) {
+        if (this.emojis?.length > 0) {
+            setEmoji(element, this.emojis, this.emojiSet);
+            return;
+        }
+        const emojisForDate = emojisModule.getEmojis(new Date());
+        if (emojisForDate) {
+            setEmoji(element, emojisForDate.emojis, emojisForDate.key);
+        }
+    }
 }
 function setEmoji(element, emojis, emojiKey) {
     let currentEmojiKey = element.data('emojis');
