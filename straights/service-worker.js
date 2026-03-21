@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025-2026 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-const CACHE_NAME = 'v0.8.3';
+const CACHE_NAME = 'v0.8.5';
 const urlsToCache = [
     './',
     './.htaccess',

@@ -7,9 +7,9 @@
   "targets": {
     ".NETCoreApp,Version=v10.0": {},
     ".NETCoreApp,Version=v10.0/browser-wasm": {
-      "Straights.Web/0.8.3+22479535500": {
+      "Straights.Web/0.8.5+23388689692": {
         "dependencies": {
-          "Straights.Solver": "0.8.3"
+          "Straights.Solver": "0.8.5"
         },
         "runtime": {
           "Straights.Web.dll": {}
@@ -57,21 +57,21 @@
           }
         }
       },
-      "Straights.Solver/0.8.3": {
+      "Straights.Solver/0.8.5": {
         "dependencies": {
           "System.IO.Abstractions": "22.1.0"
         },
         "runtime": {
           "Straights.Solver.dll": {
-            "assemblyVersion": "0.8.3.0",
-            "fileVersion": "0.8.3.0"
+            "assemblyVersion": "0.8.5.0",
+            "fileVersion": "0.8.5.0"
           }
         }
       }
     }
   },
   "libraries": {
-    "Straights.Web/0.8.3+22479535500": {
+    "Straights.Web/0.8.5+23388689692": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
@@ -104,7 +104,7 @@
       "path": "testably.abstractions.filesystem.interface/10.0.0",
       "hashPath": "testably.abstractions.filesystem.interface.10.0.0.nupkg.sha512"
     },
-    "Straights.Solver/0.8.3": {
+    "Straights.Solver/0.8.5": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
