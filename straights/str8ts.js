@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2020 Luis Walter, 2025-2026 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+/// <reference types="jquery" />
 // module imports
 import * as Str8ts from './game.js';
 import * as Renderer from './gameRenderer.js';
@@ -477,6 +478,12 @@ export class UIController {
         else if (key === 'Backspace' || key === 'Delete') {
             this.handleDelete();
             handled = true;
+        }
+        else if (key === 'Escape') {
+            if (!this.$('#generating-new-game-dialog').is(':visible')) {
+                handled = true;
+                this.showDialogAsync(false);
+            }
         }
         if (handled) {
             e.preventDefault();

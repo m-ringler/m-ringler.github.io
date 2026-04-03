@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2025-2026 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+/// <reference types="jquery" />
 export class HistoryRenderer {
     $;
     historyDiv;

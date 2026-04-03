@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: 2025-2026 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-const CACHE_NAME = 'v0.8.5';
+/// <reference lib="webworker" />
+const CACHE_NAME = 'v0.8.6';
 const urlsToCache = [
     './',
     './.htaccess',
@@ -82,9 +83,10 @@ async function _fetch(request) {
     // Non-HTTP(S) requests: just fetch
     return await fetch(request);
 }
-self.addEventListener('install', (event) => {
+const serviceWorkerSelf = self;
+serviceWorkerSelf.addEventListener('install', (event) => {
     console.info('Installing service worker', CACHE_NAME);
-    self.skipWaiting();
+    serviceWorkerSelf.skipWaiting();
     event.waitUntil(caches.open(CACHE_NAME).then((cache) => {
         return Promise.all(urlsToCache.map((url) => fetchFresh(url)
             .then((response) => cache.put(url, response))
@@ -103,8 +105,8 @@ self.addEventListener('activate', (event) => {
                 await caches.delete(cacheName);
             }
         }));
-        await self.clients.claim();
-        const clients = await self.clients.matchAll();
+        await serviceWorkerSelf.clients.claim();
+        const clients = await serviceWorkerSelf.clients.matchAll();
         clients.forEach((client) => client.postMessage('reload'));
     })());
 });
