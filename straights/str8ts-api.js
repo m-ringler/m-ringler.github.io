@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 Moritz Ringler
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-const worker = new Worker('str8ts-api-worker.js');
+const worker = new Worker('str8ts-api-worker.js', { type: 'module' });
 export function generate(size, difficulty, gridLayout) {
     return run_in_worker({
         method: 'generate',
