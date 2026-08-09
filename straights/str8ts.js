@@ -45,6 +45,7 @@ const MIN_GRID_SIZE = 4;
 const MAX_GRID_SIZE = 12;
 const DEFAULT_GRID_SIZE = 9;
 const DEFAULT_DIFFICULTY = 3;
+const DEFAULT_AUTOFILL_SINGLE_NOTE = true;
 // We wrap the UI behavior into a single controller class to avoid leaking many globals
 export class UIController {
     // state
@@ -266,6 +267,16 @@ export class UIController {
         const urlParams = new URLSearchParams(this.win.location.search);
         return urlParams.get(name);
     }
+    getURLBooleanParameter(name, defaultValue) {
+        const value = this.getURLParameter(name);
+        if (value === 'true' || value === '1') {
+            return true;
+        }
+        if (value === 'false' || value === '0') {
+            return false;
+        }
+        return defaultValue;
+    }
     removeURLParameter(paramKey) {
         // Get the current URL and its search part
         const url = new URL(this.win.location.href);
@@ -305,9 +316,13 @@ export class UIController {
     async startGameCodeAsync(code) {
         console.log('Game:', code);
         const emojis = this.getURLParameter('emojis');
+        const autoFillSingleNote = this.getURLBooleanParameter('autoFillSingleNote', DEFAULT_AUTOFILL_SINGLE_NOTE);
         this.gameUrl = this.win.location.href.split('?')[0] + '?code=' + code;
         if (emojis != null) {
             this.gameUrl += '&emojis=' + emojis;
+        }
+        if (autoFillSingleNote != DEFAULT_AUTOFILL_SINGLE_NOTE) {
+            this.gameUrl += `&autoFillSingleNote=${autoFillSingleNote}`;
         }
         this.gameCode = code;
         await this.startGameAsync(true);
@@ -339,8 +354,9 @@ export class UIController {
             this.$('.container').removeClass('finished');
             await this.showDialogAsync(false);
             const emojiString = this.getURLParameter('emojis');
+            const autoFillSingleNote = this.getURLBooleanParameter('autoFillSingleNote', DEFAULT_AUTOFILL_SINGLE_NOTE);
             this.renderer.setEmojis(emojiString);
-            const parsedGame = this.game.parseGameCode(this.gameCode);
+            const parsedGame = this.game.parseGameCode(this.gameCode, autoFillSingleNote);
             if (parsedGame) {
                 this.game = parsedGame;
                 hasGame = true;
