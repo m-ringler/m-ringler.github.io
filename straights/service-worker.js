@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 /// <reference lib="webworker" />
-const CACHE_NAME = 'v0.8.10';
+const CACHE_NAME = 'v0.9.0';
 const urlsToCache = [
     './',
     './.htaccess',
